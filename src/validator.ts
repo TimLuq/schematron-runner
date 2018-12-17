@@ -1,11 +1,10 @@
 
-import parseSchematron, { IAssertion, IParsedSchematron, IRule } from "./parseSchematron";
-import testAssertion, { ITestAssertionError, ITestAssertionResult } from "./testAssertion";
+import parseSchematron, { IAssertion, IFunction, IParsedSchematron, IRule } from "./parse-schematron";
+import testAssertion, { ITestAssertionError, ITestAssertionResult } from "./test-assertion";
 
-import { loadXML, replaceTestWithExternalDocument, schematronIncludes } from "./includeExternalDocument";
+import { loadXML, replaceTestWithExternalDocument, schematronIncludes } from "./include-external-document";
 
-import { XPathSelect } from "xpath";
-import xpath from "./xpathHelper";
+import xpath from "./xpath-helper";
 
 import sha1 from "./sha1";
 
@@ -47,7 +46,7 @@ interface IContextState extends IValidateOptions {
     contexts: Map<string, Node[]>;
     document: Document;
     DOM: { new(): DOMParser; };
-    select: XPathSelect;
+    select: xpath.IXPathSelect;
 }
 
 interface IRuleResult {
@@ -88,6 +87,35 @@ function isRuleIgnored(result: IRuleResult | IRuleIgnored): result is IRuleIgnor
 
 function isAssertionIgnored(results: ITestAssertionResult[] | ITestAssertionError): results is ITestAssertionError {
     return (results as ITestAssertionError).ignored || false;
+}
+
+function processFunction(t: IFunction): (c: xpath.XPathContext, ...r: xpath.XPathType[]) => xpath.XPathType {
+    if (t.variables.length) {
+        throw new Error("TODO: Function variables not implemented");
+    }
+    return (c, ...args) => {
+        if (args.length !== t.params.length) {
+            throw new Error("Argument length mismatch of function " + t.name
+                + ". Actual: " + args.length + ", expected: " + t.params.length);
+        }
+        for (let i = 0; i < args.length; i++) {
+            const p = t.params[i];
+            switch (p.type && p.type.replace(/^.+:/, "")) {
+                case "number":
+                case "decimal":
+                    args[i] = args[i].number();
+                    break;
+                case "string":
+                    args[i] = args[i].string();
+                    break;
+                case "boolean":
+                    args[i] = args[i].bool();
+                    break;
+            }
+        }
+        const c2 = { ...c };
+        return new xpath.XBoolean();
+    };
 }
 
 export async function validate(xml: string, schematron: string, options?: Partial<IValidateOptions>) {
@@ -149,20 +177,67 @@ export async function validate(xml: string, schematron: string, options?: Partia
         })();
     }
 
-    const { namespaceMap, patternRuleMap, ruleMap } = await parsedSchematron;
+    const { namespaceMap, patternRuleMap, ruleMap, functions } = await parsedSchematron;
 
     // Create selector object, initialized with namespaces
-    const nsObj: { [k: string]: string; } = {
-        xs: "http://www.w3.org/2001/XMLSchema-datatypes",
-        xsi: "http://www.w3.org/2001/XMLSchema-datatypes",
-    };
+    const nsObj = new Map<string, string[]>();
     for (const [nspf, uri] of namespaceMap.entries()) {
-        nsObj[nspf] = uri;
+        let a = nsObj.get(uri);
+        if (!a) {
+            nsObj.set(uri, a = []);
+        }
+        a.push(nspf);
     }
 
     const errors = [];
     const warnings = [];
     const ignored = [];
+
+    const evaluatorOptions: xpath.IXPathEvaluatorOptions = {
+        functions(ln, ns) {
+            const prefs = (ns && nsObj.get(ns)) || [];
+            for (const p of prefs) {
+                const t = functions.get(p + ":" + ln);
+                if (t) {
+                    return processFunction(t);
+                }
+            }
+            return undefined;
+        },
+    };
+
+    const sel = (expression: string, node: Node, single?: boolean) => {
+        const ev = xpath.parse(expression);
+        const value = ev.evaluate({ ...evaluatorOptions, node });
+
+        if (value === null) {
+            return undefined as any as string;
+        }
+        switch (typeof value) {
+            case "string": return value;
+            case "boolean": return value;
+            case "number": return value;
+            case "undefined": return undefined as any as string;
+        }
+
+        if (value instanceof xpath.XString) {
+            return value.stringValue();
+        }
+        if (value instanceof xpath.XBoolean) {
+            return value.booleanValue();
+        }
+        if (value instanceof xpath.XNumber) {
+            return value.numberValue();
+        }
+        if (value instanceof xpath.XNodeSet) {
+            const res = value.toArray();
+            if (single) {
+                return res[0];
+            }
+            return res;
+        }
+        throw new TypeError("Unexpected result");
+    };
 
     const state: IContextState = {
         DOM,
@@ -170,7 +245,7 @@ export async function validate(xml: string, schematron: string, options?: Partia
         document: xmlDoc,
         includeWarnings,
         resourceDir,
-        select: xpath.useNamespaces(nsObj),
+        select: sel as xpath.IXPathSelect,
         xmlSnippetMaxLength,
     };
 

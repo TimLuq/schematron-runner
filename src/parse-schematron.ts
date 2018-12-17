@@ -1,4 +1,4 @@
-import xpath from "./xpathHelper";
+import xpath from "./xpath-helper";
 
 function* getNamedChildren(parent: Element, localName: string, ns?: string): IterableIterator<Element> {
     const children = parent.childNodes;
@@ -35,6 +35,14 @@ export interface IAssertion {
     description: IDescription[];
 }
 
+export interface IFunction {
+    name: string;
+    type: string;
+    params: Array<{ name: string; type?: string; }>;
+    variables: Array<{ name: string; select: string; }>;
+    select: string;
+}
+
 export interface IRule {
     abstract: boolean;
     assertionsAndExtensions: IAssertionOrExtension[];
@@ -43,9 +51,27 @@ export interface IRule {
 }
 
 export interface IParsedSchematron {
+    functions: Map<string, IFunction>;
     namespaceMap: Map<string, string>;
     patternRuleMap: Map<string, IRule[]>;
     ruleMap: Map<string, IRule>;
+}
+
+function getVal<O extends object, A1 extends keyof O>(o: O, a1: A1): O[A1] | undefined;
+// tslint:disable-next-line:max-line-length
+function getVal<O extends object, A1 extends keyof O, A2 extends keyof O[A1]>(o: O, a1: A1, a2: A2): O[A1][A2] | undefined;
+// tslint:disable-next-line:max-line-length
+function getVal<O extends object, A1 extends keyof O, A2 extends keyof O[A1], A3 extends keyof O[A1][A2]>(o: O, a1: A1, a2: A2, a3: A3): O[A1][A2][A3] | undefined;
+// tslint:disable-next-line:max-line-length
+function getVal<O extends object>(o: O, ...args: Array<string | number | symbol>): any {
+    let v: any = o;
+    for (const a of args) {
+        if (!v) {
+            return undefined;
+        }
+        v = v[a];
+    }
+    return v;
 }
 
 export default function parseSchematron(doc: Document) {
@@ -55,6 +81,7 @@ export default function parseSchematron(doc: Document) {
     const patternLevelMap = new Map<string, "error" | "warning">();
     const patternRuleMap = new Map<string, IRule[]>();
     const ruleMap = new Map<string, IRule>();
+    const functions = new Map<string, IFunction>();
 
     //// Namespace mapping
     const namespaces = xpath.select('//*[local-name()="ns"]', doc) as Element[];
@@ -63,6 +90,32 @@ export default function parseSchematron(doc: Document) {
         const ns = namespace.getAttribute("uri");
         if (pf && ns) {
             namespaceMap.set(pf, ns);
+        }
+    }
+
+    //// Function definitions
+    const functionList = xpath.select('//*[local-name()="function"]', doc) as Element[];
+    for (const func of functionList) {
+        const select = xpath.select('//*[local-name()="value-of"]/@select', func) as Attr[];
+        const f: IFunction = {
+            name: func.getAttribute("name") as string,
+            params: (xpath.select('//*[local-name()="param"]', func) as Element[]).map((e) => {
+                return {
+                    name: e.getAttribute("name") as string,
+                    type: e.getAttribute("as") || undefined,
+                };
+            }),
+            select: getVal(select, 0, "value") as string,
+            type: func.getAttribute("as") as string,
+            variables: (xpath.select('//*[local-name()="variable"]', func) as Element[]).map((e) => {
+                return {
+                    name: e.getAttribute("name") as string,
+                    select: e.getAttribute("select") as string,
+                };
+            }),
+        };
+        if (f.select && f.name) {
+            functions.set(f.name, f);
         }
     }
 
@@ -164,10 +217,14 @@ export default function parseSchematron(doc: Document) {
         patternRuleMap.delete(patternId);
     }
 
-    return {
+    const ret: IParsedSchematron = {
+        functions,
         namespaceMap,
         patternRuleMap,
-    } as IParsedSchematron;
+        ruleMap,
+    };
+
+    return ret;
 }
 
 function replaceParams(params: Map<string, string>, content: string) {

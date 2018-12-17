@@ -1,4 +1,4 @@
-import { XPathSelect } from "xpath";
+import xpath from "./xpath-helper";
 
 export interface ITestAssertionResult {
     result: boolean;
@@ -22,7 +22,7 @@ export interface ITestAssertionError {
  * @param resourceDir a directory path
  * @param xmlSnippetMaxLength max length of the snippet to be returned
  */
-export default function testAssertion(test: string, selected: Node[], select: XPathSelect,
+export default function testAssertion(test: string, selected: Node[], select: xpath.IXPathSelect,
                                       xmlDoc: Document, resourceDir: string, xmlSnippetMaxLength: number) {
     const results: ITestAssertionResult[] = [];
 

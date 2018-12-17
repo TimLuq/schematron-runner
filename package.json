@@ -1,45 +1,50 @@
 {
-  "name": "cda-schematron",
-  "version": "2.0.0",
+  "name": "schematron-runner",
+  "version": "1.0.0-snapshot",
   "description": "A javascript implementation of schematron testing for XML documents. This specifically resolves a need for a package that allows a quick, reliable install for validating HL7 clinical documents, such as C-CDA.",
-  "main": "./umd/validator.js",
-  "module": "./esm/validator.js",
-  "types": "./esm/validator.d.ts",
+  "main": "./cjs/schematron-runner.js",
+  "module": "./esm/schematron-runner.js",
+  "types": "./esm/schematron-runner.d.ts",
   "scripts": {
-    "test": "grunt",
-    "build": "npm run build-umd && npm run build-esnext",
-    "build-umd": "tsc -p tsconfig.json",
-    "build-esnext": "tsc -p tsconfig.json --module esnext --outDir esm"
+    "build": "npm run build-cjs && npm run build-esnext",
+    "build-cjs": "tsc -p tsconfig.json",
+    "build-esnext": "tsc -p tsconfig.json --module esnext --outDir esm",
+    "ci": "npm run build-cjs && npm run test",
+    "coverage": "nyc report --reporter=text-lcov | coveralls",
+    "report": "nyc report --reporter=html",
+    "test": "nyc ava"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ewadkins/cda-schematron.git"
+    "url": "git+https://github.com/TimLuq/schematron-runner.git"
   },
-  "author": "Eric Wadkins",
+  "author": {
+    "name": "Tim Lundqvist",
+    "url": "https://github.com/TimLuq"
+  },
   "contributors": [
-    {
-      "name": "Tim Lundqvist",
-      "url": "https://github.com/TimLuq"
-    }
+    { "name": "Eric Wadkins" }
   ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ewadkins/cda-schematron/issues"
+    "url": "https://github.com/TimLuq/schematron-runner/issues"
   },
-  "homepage": "https://github.com/ewadkins/cda-schematron#readme",
+  "homepage": "https://github.com/TimLuq/schematron-runner#readme",
   "devDependencies": {
-    "@types/node": "^9.4.7",
-    "@types/node-fetch": "^1.6.7",
+    "@babel/core": "^7.2.2",
+    "@babel/plugin-proposal-class-properties": "^7.2.1",
+    "@babel/plugin-syntax-dynamic-import": "^7.2.0",
+    "@babel/preset-env": "^7.2.0",
+    "@babel/preset-typescript": "^7.1.0",
+    "@types/node": "^10.12.15",
+    "@types/node-fetch": "^2.1.4",
     "@types/xmldom": "^0.1.29",
-    "chai": "^3.5.0",
-    "grunt": "^1.0.1",
-    "grunt-contrib-jshint": "^1.1.0",
-    "grunt-mocha-test": "^0.13.2",
-    "mocha": "^3.2.0",
-    "typescript": "^2.7.2"
+    "ava": "^1.0.1",
+    "nyc": "^13.1.0",
+    "typescript": "^3.2.2"
   },
   "dependencies": {
-    "node-fetch": "^2.1.1",
+    "node-fetch": "^2.3.0",
     "xmldom": "^0.1.27",
     "xpath": "^0.0.27"
   }

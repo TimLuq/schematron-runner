@@ -1,4 +1,4 @@
-import xpath from "./xpathHelper";
+import xpath from "./xpath-helper";
 
 const loadedExternalDocuments = new Map<string, Promise<Document>>();
 
