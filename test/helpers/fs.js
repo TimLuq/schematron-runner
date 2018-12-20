@@ -1,12 +1,12 @@
-const fs = require("fs").promises;
+const fs = require("fs");
 
-if (fs) {
+if (fs.promises) {
     function copyItems(src, dst, ...keys) {
         for (const k of keys) {
             dst[k] = src[k];
         }
     }
-    copyItems(fs, exports, "readFile");
+    copyItems(fs.promises, exports, "readFile");
 } else {
     const future = require("./future").default;
 
