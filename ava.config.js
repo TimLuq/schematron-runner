@@ -17,7 +17,7 @@ export default {
         },
         extensions: ["ts", "js"]
     },
-    compileEnhancements: false,
+    // compileEnhancements: false,
     // extensions: ["ts", "js"],
     files: ["./test/tests/*.spec.ts"]
 };

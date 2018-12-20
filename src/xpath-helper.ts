@@ -4,8 +4,9 @@
 import * as hiddenXpath from "xpath";
 
 // tslint:disable-next-line:no-namespace
-export namespace xpath {}
-Object.assign(xpath, hiddenXpath as {});
+export namespace xpath {
+    Object.assign(xpath, hiddenXpath as {});
+}
 
 // tslint:disable-next-line:no-namespace
 export declare namespace xpath {
@@ -40,7 +41,7 @@ export declare namespace xpath {
 
     export class VariableResolver {
         public constructor();
-        public getVariable(prefix: string, n: Node): XPathType | null;
+        public getVariable(ln: string, ns: string): XPathType | null;
     }
 
     export class FunctionResolver {
@@ -67,41 +68,41 @@ export declare namespace xpath {
 
     export class XPathParser {
 
-        public static readonly DOUBLEDOT = 2;
-        public static readonly DOUBLECOLON = 3;
-        public static readonly DOUBLESLASH = 4;
-        public static readonly NOTEQUAL = 5;
-        public static readonly LESSTHANOREQUAL = 6;
-        public static readonly GREATERTHANOREQUAL = 7;
-        public static readonly AND = 8;
-        public static readonly OR = 9;
-        public static readonly MOD = 10;
-        public static readonly DIV = 11;
-        public static readonly MULTIPLYOPERATOR = 12;
-        public static readonly FUNCTIONNAME = 13;
-        public static readonly AXISNAME = 14;
-        public static readonly LITERAL = 15;
-        public static readonly NUMBER = 16;
-        public static readonly ASTERISKNAMETEST = 17;
-        public static readonly QNAME = 18;
-        public static readonly NCNAMECOLONASTERISK = 19;
-        public static readonly NODETYPE = 20;
-        public static readonly PROCESSINGINSTRUCTIONWITHLITERAL = 21;
-        public static readonly EQUALS = 22;
-        public static readonly LESSTHAN = 23;
-        public static readonly GREATERTHAN = 24;
-        public static readonly PLUS = 25;
-        public static readonly MINUS = 26;
-        public static readonly BAR = 27;
-        public static readonly SLASH = 28;
-        public static readonly LEFTPARENTHESIS = 29;
-        public static readonly RIGHTPARENTHESIS = 30;
-        public static readonly COMMA = 31;
-        public static readonly AT = 32;
-        public static readonly LEFTBRACKET = 33;
-        public static readonly RIGHTBRACKET = 34;
-        public static readonly DOT = 35;
-        public static readonly DOLLAR = 36;
+        public static readonly DOUBLEDOT: 2;
+        public static readonly DOUBLECOLON: 3;
+        public static readonly DOUBLESLASH: 4;
+        public static readonly NOTEQUAL: 5;
+        public static readonly LESSTHANOREQUAL: 6;
+        public static readonly GREATERTHANOREQUAL: 7;
+        public static readonly AND: 8;
+        public static readonly OR: 9;
+        public static readonly MOD: 10;
+        public static readonly DIV: 11;
+        public static readonly MULTIPLYOPERATOR: 12;
+        public static readonly FUNCTIONNAME: 13;
+        public static readonly AXISNAME: 14;
+        public static readonly LITERAL: 15;
+        public static readonly NUMBER: 16;
+        public static readonly ASTERISKNAMETEST: 17;
+        public static readonly QNAME: 18;
+        public static readonly NCNAMECOLONASTERISK: 19;
+        public static readonly NODETYPE: 20;
+        public static readonly PROCESSINGINSTRUCTIONWITHLITERAL: 21;
+        public static readonly EQUALS: 22;
+        public static readonly LESSTHAN: 23;
+        public static readonly GREATERTHAN: 24;
+        public static readonly PLUS: 25;
+        public static readonly MINUS: 26;
+        public static readonly BAR: 27;
+        public static readonly SLASH: 28;
+        public static readonly LEFTPARENTHESIS: 29;
+        public static readonly RIGHTPARENTHESIS: 30;
+        public static readonly COMMA: 31;
+        public static readonly AT: 32;
+        public static readonly LEFTBRACKET: 33;
+        public static readonly RIGHTBRACKET: 34;
+        public static readonly DOT: 35;
+        public static readonly DOLLAR: 36;
 
         public constructor();
 
@@ -112,16 +113,26 @@ export declare namespace xpath {
     }
 
     export class XPathResult {
-        public static readonly ANY_TYPE = 0;
-        public static readonly NUMBER_TYPE = 1;
-        public static readonly STRING_TYPE = 2;
-        public static readonly BOOLEAN_TYPE = 3;
-        public static readonly UNORDERED_NODE_ITERATOR_TYPE = 4;
-        public static readonly ORDERED_NODE_ITERATOR_TYPE = 5;
-        public static readonly UNORDERED_NODE_SNAPSHOT_TYPE = 6;
-        public static readonly ORDERED_NODE_SNAPSHOT_TYPE = 7;
-        public static readonly ANY_UNORDERED_NODE_TYPE = 8;
-        public static readonly FIRST_ORDERED_NODE_TYPE = 9;
+        /** `ANY_TYPE = 0` */
+        public static readonly ANY_TYPE: 0;
+        /** `NUMBER_TYPE = 1` */
+        public static readonly NUMBER_TYPE: 1;
+        /** `STRING_TYPE = 2` */
+        public static readonly STRING_TYPE: 2;
+        /** `BOOLEAN_TYPE = 3` */
+        public static readonly BOOLEAN_TYPE: 3;
+        /** `UNORDERED_NODE_ITERATOR_TYPE = 4` */
+        public static readonly UNORDERED_NODE_ITERATOR_TYPE: 4;
+        /** `ORDERED_NODE_ITERATOR_TYPE = 5` */
+        public static readonly ORDERED_NODE_ITERATOR_TYPE: 5;
+        /** `UNORDERED_NODE_SNAPSHOT_TYPE = 6` */
+        public static readonly UNORDERED_NODE_SNAPSHOT_TYPE: 6;
+        /** `ORDERED_NODE_SNAPSHOT_TYPE = 7` */
+        public static readonly ORDERED_NODE_SNAPSHOT_TYPE: 7;
+        /** `ANY_UNORDERED_NODE_TYPE = 8` */
+        public static readonly ANY_UNORDERED_NODE_TYPE: 8;
+        /** `FIRST_ORDERED_NODE_TYPE = 9` */
+        public static readonly FIRST_ORDERED_NODE_TYPE: 9;
 
         public readonly resultType: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
         public readonly invalidIteratorState?: false;
@@ -225,18 +236,18 @@ export declare namespace xpath {
     }
     export const select: IXPathSelect;
     export function selectWithResolver(
-            expression: string, node: Node,
-            resolver: IXPathNSResolver | null | undefined, single?: false,
-        ): string | number | boolean | Array<Node | Attr>;
+        expression: string, node: Node,
+        resolver: IXPathNSResolver | null | undefined, single?: false,
+    ): string | number | boolean | Array<Node | Attr>;
     export function selectWithResolver(
-            expression: string, node: Node,
-            resolver: IXPathNSResolver | null | undefined, single: true,
-        ): Node | Attr | string | number | boolean | undefined;
+        expression: string, node: Node,
+        resolver: IXPathNSResolver | null | undefined, single: true,
+    ): Node | Attr | string | number | boolean | undefined;
     export function select1(expression: string, node?: Node): Node | Attr | string | number | boolean | undefined;
     export function evaluate(
-            expression: string, contextNode: Node, resolver: IXPathNSResolver,
-            type: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9, result: XPathResult,
-        ): XPathResult;
+        expression: string, contextNode: Node, resolver: IXPathNSResolver,
+        type: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9, result: XPathResult,
+    ): XPathResult;
     export function useNamespaces(namespaceMap: { [name: string]: string }): IXPathSelect;
 
     export function createExpression(e: string, r?: IXPathNSResolver): XPathExpression;
@@ -244,11 +255,11 @@ export declare namespace xpath {
 
     export interface IXPathEvaluatorOptions {
         namespaces?: NamespaceResolver | { [k: string]: string; }
-            | ((prefix: string, n: Node) => string | null);
+        | ((prefix: string, n: Node) => string | null);
         functions?: FunctionResolver | { [k: string]: XPathFunction; }
-            | ((ln: string, ns: string) => XPathFunction | undefined);
+        | ((ln: string, ns: string) => XPathFunction | undefined);
         variables?: VariableResolver | { [k: string]: string; }
-            | ((prefix: string, n: Node) => string | null);
+        | ((prefix: string, n: Node) => string | null);
 
         node?: Node;
 
@@ -272,23 +283,24 @@ export declare namespace xpath {
 
 const stdAddStandardFunctions = xpath.FunctionResolver.prototype.addStandardFunctions;
 xpath.FunctionResolver.prototype.addStandardFunctions =
-  function addStandardFunctions(this: xpath.FunctionResolver) {
-    stdAddStandardFunctions.call(this);
-    for (const f of Object.keys(this.functions).filter((k) => k.startsWith("{}"))) {
-        const ln = f.substring(2);
-        this.functions["{http://www.w3.org/2001/XMLSchema-datatypes}" + ln] = this.functions[f];
-        this.functions["{http://www.w3.org/2001/XMLSchema}" + ln] = this.functions[f];
-    }
-};
+    function addStandardFunctions(this: xpath.FunctionResolver) {
+        const ths = this as xpath.FunctionResolver & { functions: { [k: string]: xpath.XPathFunction; }; };
+        stdAddStandardFunctions.call(ths);
+        for (const f of Object.keys(ths.functions).filter((k) => k.startsWith("{}"))) {
+            const ln = f.substring(2);
+            ths.functions["{http://www.w3.org/2001/XMLSchema-datatypes}" + ln] = ths.functions[f];
+            ths.functions["{http://www.w3.org/2001/XMLSchema}" + ln] = ths.functions[f];
+        }
+    };
 
-const stdGetNamespace  = xpath.NamespaceResolver.prototype.getNamespace;
+const stdGetNamespace = xpath.NamespaceResolver.prototype.getNamespace;
 xpath.NamespaceResolver.prototype.getNamespace =
-  function getNamespace(this: xpath.NamespaceResolver, prefix: string, n: Node) {
-    const r = stdGetNamespace.call(this, prefix, n);
-    if (!r && (prefix === "xs" || prefix === "xsi")) {
-        return "http://www.w3.org/2001/XMLSchema-datatypes";
-    }
-    return r;
-};
+    function getNamespace(this: xpath.NamespaceResolver, prefix: string, n: Node) {
+        const r = stdGetNamespace.call(this, prefix, n);
+        if (!r && (prefix === "xs" || prefix === "xsi")) {
+            return "http://www.w3.org/2001/XMLSchema-datatypes";
+        }
+        return r;
+    };
 
 export default xpath;

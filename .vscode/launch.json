@@ -7,10 +7,43 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
-            "program": "${workspaceFolder}/test/node-test.js",
-            "outFiles": [
-                "${workspaceFolder}/**/*.js"
+            "name": "Run AVA test",
+            "program": "${workspaceRoot}/node_modules/ava/profile.js",
+            "args": [
+              "${file}"
+            ],
+            "sourceMaps": true,
+            "skipFiles": [
+                "<node_internals>/**/*.js",
+                "node_modules/**/*.js"
+            ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Run AVA test 1",
+            "program": "${workspaceRoot}/node_modules/ava/profile.js",
+            "args": [
+                "test/tests/test-1.spec.ts"
+            ],
+            "sourceMaps": true,
+            "skipFiles": [
+                "<node_internals>/**/*.js",
+                "node_modules/**/*.js"
+            ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Run AVA test 2",
+            "program": "${workspaceRoot}/node_modules/ava/profile.js",
+            "args": [
+                "test/tests/test-2.spec.ts"
+            ],
+            "sourceMaps": true,
+            "skipFiles": [
+                "<node_internals>/**/*.js",
+                "node_modules/**/*.js"
             ]
         }
     ]

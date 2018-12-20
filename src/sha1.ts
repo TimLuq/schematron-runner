@@ -40,9 +40,10 @@ if (typeof crypto !== "undefined" && crypto.subtle) {
             if (data instanceof Buffer) {
                 return data as Buffer;
             }
-            const arr =  data instanceof ArrayBuffer ? data
-                : data.buffer.slice(data.byteOffset, data.byteLength - data.byteOffset);
-            return Buffer.from(arr);
+            if (data instanceof ArrayBuffer) {
+                return Buffer.from(data);
+            }
+            return Buffer.from(data.buffer as ArrayBuffer, data.byteOffset, data.byteLength);
         };
     }
 

@@ -1,41 +1,48 @@
-# cda-schematron
-A javascript implementation of schematron testing for XML documents. This specifically resolves a need for a package that allows a quick, reliable install for validating HL7 clinical documents, such as C-CDA.
+# schematron-runner
+[![Build Status](https://travis-ci.org/TimLuq/schematron-runner.svg?branch=master)](https://travis-ci.org/TimLuq/schematron-runner)
+[![npm version](https://img.shields.io/npm/v/schematron-runner.svg)](https://npm.im/schematron-runner)
+[![license](https://img.shields.io/npm/l/schematron-runner.svg)](https://npm.im/schematron-runner)
+[![dependencies Status](https://david-dm.org/TimLuq/schematron-runner/status.svg)](https://david-dm.org/TimLuq/schematron-runner)
+[![Coverage Status](https://coveralls.io/repos/github/TimLuq/schematron-runner/badge.svg?branch=master)](https://coveralls.io/github/TimLuq/schematron-runner?branch=master)
 
-Check out [cda-schematron-server](https://github.com/ewadkins/cda-schematron-server), a server wrapper of **cda-schematron**, for easy schematron validation.
+A javascript implementation of schematron testing for XML documents. This specifically resolves a need for a package that allows a quick, reliable install for validating HL7 clinical documents, such as C-CDA.
 
 ### Install
 ```
-npm install cda-schematron
+npm install schematron-runner
 ```
 
 ### Validating xml
 ```javascript
-var validator = require('cda-schematron');
+import validator from "schematron-runner";
+import { promises as fs } from "fs";
 
-var xmlPath = 'someFile.xml';
-var schematronPath = 'someFile.sch';
+const xmlPath = 'someFile.xml';
+const schematronPath = 'someFile.sch';
 
-var fs = require('fs');
-var xml = fs.readFileSync(xmlPath).toString();
-var schematron = fs.readFileSync(schematronPath).toString();
+(async () => {
+    const xml = await fs.readFile(xmlPath, "utf8");
+    const schematron = await fs.readFile(schematronPath, "utf8");
 
-var results = validator.validate(xml, schematron);
+    const results = await validator.validate(xml, schematron);
+    // do stuff with results
+})();
 ```
 File paths can also be passed to the validator directly. The following lines all return the same results:
 ```javascript
-var results = validator.validate(xml, schematronPath);
+const results = await validator.validate(xml, schematronPath);
 ```
 ```javascript
-var results = validator.validate(xmlPath, schematron);
+const results = await validator.validate(xmlPath, schematron);
 ```
 ```javascript
-var results = validator.validate(xmlPath, schematronPath);
+const results = await validator.validate(xmlPath, schematronPath);
 ```
 
 ### Results
-```results``` is an object containing arrays  ```errors```, ```warnings```, and ```ignoreds```.
+`results` is an object containing arrays  `errors`, `warnings`, and `ignoreds`.
 
-**Errors** and **warnings** are reported as determined by the schematron and test descriptions. They are of the following form:
+**Errors**, **warnings**, and **passed** are reported as determined by the schematron and test descriptions. They are of the following form:
 ```javascript
 {
     type: type,                     // "error" or "warning"
@@ -68,18 +75,18 @@ var results = validator.validate(xmlPath, schematronPath);
 ```
 
 ### Options
-The ```validate``` function takes in an ```options``` object as an optional third argument. The three fields that can be included in ```options``` are as follows:
+The `validate` function takes in an `options` object as an optional third argument. The three fields that can be included in `options` are as follows:
 
-* **```includeWarnings```**: ```true``` or ```false```, this determines whether or not warnings should be tested and returned. Defaults to ```true```.
+* **`includeWarnings`**: `true` or `false`, this determines whether or not warnings should be tested and returned. Defaults to `true`.
 
-* **```resourceDir```**: the path to a directory containing resource files (eg. voc.xml) which may be necessary for some schematron tests. Defaults to ```'./'```, the current directory.
+* **`resourceDir`**: the path to a directory containing resource files (eg. voc.xml) which may be necessary for some schematron tests. Defaults to `'./'`, the current directory.
 
-* **```xmlSnippetMaxLength```**: an integer, which is the maximum length of the ```xml``` field in validation results. Defaults to ```200```. Set to ```0``` for unlimited length.
+* **`xmlSnippetMaxLength`**: an integer, which is the maximum length of the `xml` field in validation results. Defaults to `200`. Set to `0` for unlimited length.
 
 Here is an example with warnings disabled:
 
 ```javascript
-var results = validator.validate(xml, schematron, { includeWarnings: false });
+const results = await validator.validate(xml, schematron, { includeWarnings: false });
 ```
 
 ### Cache
@@ -91,7 +98,7 @@ validator.clearCache();
 ---
 ## License (MIT)
 
-Copyright &copy; 2017 [Eric Wadkins](http://www.ericwadkins.com/)
+Copyright &copy; 2017 [Eric Wadkins](http://www.ericwadkins.com/), 2018 [Tim Lundqvist](https://github.com/TimLuq/).
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

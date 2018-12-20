@@ -81,6 +81,24 @@ export interface IValidationResult {
     xml: string | null;
 }
 
+export interface IIgnoredResult {
+    type: "error" | "warning";
+    test: string;
+    simplifiedTest: string | null;
+    patternId: string;
+    ruleId?: string;
+    errorMessage: string | ITestAssertionError | ITestAssertionError[];
+    assertionId: string;
+    context: string;
+}
+
+export interface ICompletedValidation {
+    errors: IValidationResult[];
+    ignored: IIgnoredResult[];
+    passed: IValidationResult[];
+    warnings: IValidationResult[];
+}
+
 function isRuleIgnored(result: IRuleResult | IRuleIgnored): result is IRuleIgnored {
     return (result as IRuleIgnored).ignored || false;
 }
@@ -90,14 +108,13 @@ function isAssertionIgnored(results: ITestAssertionResult[] | ITestAssertionErro
 }
 
 function processFunction(t: IFunction): (c: xpath.XPathContext, ...r: xpath.XPathType[]) => xpath.XPathType {
-    if (t.variables.length) {
-        throw new Error("TODO: Function variables not implemented");
-    }
     return (c, ...args) => {
         if (args.length !== t.params.length) {
             throw new Error("Argument length mismatch of function " + t.name
                 + ". Actual: " + args.length + ", expected: " + t.params.length);
         }
+
+        // cast parameters types
         for (let i = 0; i < args.length; i++) {
             const p = t.params[i];
             switch (p.type && p.type.replace(/^.+:/, "")) {
@@ -113,8 +130,73 @@ function processFunction(t: IFunction): (c: xpath.XPathContext, ...r: xpath.XPat
                     break;
             }
         }
-        const c2 = { ...c };
-        return new xpath.XBoolean();
+
+        // create a copy of the context
+        const c2 = {
+            ...c,
+        };
+
+        // the new context should handle local variables
+        const computedVars = new Map<string, xpath.XPathType>();
+        c2.variableResolver = new (class extends xpath.VariableResolver {
+            public getVariable(ln: string, ns: string): xpath.XPathType | null {
+                let ret: xpath.XPathType | undefined = computedVars.get(ln);
+                if (ret) {
+                    return ret;
+                }
+
+                // resolve locally defined variables
+                for (const v of t.variables) {
+                    if (v.name === ln) {
+                        const e = xpath.parse(v.select);
+                        ret = e.evaluate({
+                            functions: c2.functionResolver,
+                            namespaces: c2.namespaceResolver,
+                            variables: c2.variableResolver,
+
+                            node: c2.contextNode,
+                        });
+                        computedVars.set(ln, ret);
+                        return ret;
+                    }
+                }
+
+                // resolve to function parameters
+                for (let i = 0; i < t.params.length; i++) {
+                    if (t.params[i].name === ln) {
+                        ret = args[i];
+                        return ret;
+                    }
+                }
+
+                // fallback to global values
+                return c.variableResolver.getVariable(ln, ns);
+            }
+        })();
+
+        { // evaluate the function body
+            const e = xpath.parse(t.select);
+            let ret = e.evaluate({
+                functions: c2.functionResolver,
+                namespaces: c2.namespaceResolver,
+                variables: c2.variableResolver,
+
+                node: c2.contextNode,
+            });
+            switch (ret && t.type && t.type.replace(/^.+:/, "")) {
+                case "number":
+                case "decimal":
+                    ret = ret.number();
+                    break;
+                case "string":
+                    ret = ret.string();
+                    break;
+                case "boolean":
+                    ret = ret.bool();
+                    break;
+            }
+            return ret;
+        }
     };
 }
 
@@ -189,12 +271,23 @@ export async function validate(xml: string, schematron: string, options?: Partia
         a.push(nspf);
     }
 
-    const errors = [];
-    const warnings = [];
-    const ignored = [];
+    const errors: IValidationResult[] = [];
+    const warnings: IValidationResult[] = [];
+    const ignored: IIgnoredResult[] = [];
+    const passed: IValidationResult[] = [];
 
     const evaluatorOptions: xpath.IXPathEvaluatorOptions = {
-        functions(ln, ns) {
+        namespaces(prefix) {
+            return namespaceMap.get(prefix) || null;
+        },
+    };
+    // tslint:disable-next-line:max-classes-per-file
+    evaluatorOptions.functions = new (class extends xpath.FunctionResolver {
+        public constructor() {
+            super();
+            this.addStandardFunctions();
+        }
+        public getFunction(ln: string, ns: string) {
             const prefs = (ns && nsObj.get(ns)) || [];
             for (const p of prefs) {
                 const t = functions.get(p + ":" + ln);
@@ -202,9 +295,9 @@ export async function validate(xml: string, schematron: string, options?: Partia
                     return processFunction(t);
                 }
             }
-            return undefined;
-        },
-    };
+            return super.getFunction(ln, ns);
+        }
+    })();
 
     const sel = (expression: string, node: Node, single?: boolean) => {
         const ev = xpath.parse(expression);
@@ -284,25 +377,27 @@ export async function validate(xml: string, schematron: string, options?: Partia
                         } else {
                             for (const res of asserRes.results) {
                                 const { result, line, path, xml: xmlSnippet } = res;
+                                const obj: IValidationResult = {
+                                    assertionId,
+                                    context,
+                                    description,
+                                    line,
+                                    path,
+                                    patternId,
+                                    ruleId: ruleAssertion.id,
+                                    simplifiedTest,
+                                    test,
+                                    type,
+                                    xml: xmlSnippet,
+                                };
                                 if (!result) {
-                                    const obj: IValidationResult = {
-                                        assertionId,
-                                        context,
-                                        description,
-                                        line,
-                                        path,
-                                        patternId,
-                                        ruleId: ruleAssertion.id,
-                                        simplifiedTest,
-                                        test,
-                                        type,
-                                        xml: xmlSnippet,
-                                    };
                                     if (type === "error") {
                                         errors.push(obj);
                                     } else {
                                         warnings.push(obj);
                                     }
+                                } else {
+                                    passed.push(obj);
                                 }
                             }
                         }
@@ -312,14 +407,13 @@ export async function validate(xml: string, schematron: string, options?: Partia
         }
     }
 
-    return {
-        errorCount: errors.length,
+    const ret: ICompletedValidation = {
         errors,
         ignored,
-        ignoredCount: ignored.length,
-        warningCount: warnings.length,
+        passed,
         warnings,
     };
+    return ret;
 }
 
 // tslint:disable-next-line:max-line-length
