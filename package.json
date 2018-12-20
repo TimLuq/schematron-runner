@@ -1,6 +1,6 @@
 {
   "name": "schematron-runner",
-  "version": "1.0.0-snapshot",
+  "version": "1.0.0",
   "description": "A javascript implementation of schematron testing for XML documents. This specifically resolves a need for a package that allows a quick, reliable install for validating HL7 clinical documents, such as C-CDA.",
   "main": "./cjs/schematron-runner.js",
   "module": "./esm/schematron-runner.js",
