@@ -10,7 +10,7 @@
     "build-cjs": "tsc -p tsconfig.json",
     "build-esnext": "tsc -p tsconfig.json --module esnext --outDir esm",
     "ci": "npm run build-cjs && npm run test",
-    "coverage": "nyc report --reporter=text-lcov | coveralls",
+    "coverage": "nyc report --reporter=text-lcov | npx coveralls",
     "report": "nyc report --reporter=html",
     "test": "nyc ava"
   },
