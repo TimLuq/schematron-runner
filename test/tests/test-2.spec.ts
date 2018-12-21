@@ -19,6 +19,10 @@ test("schematron include support", async (t) => {
     t.true(Array.isArray(results.passed), "return passed array");
     t.true(Array.isArray(results.warnings), "return warnings array");
 
+    for (const ig of results.ignored) {
+        t.fail("[" + ig.assertionId + "]: " + JSON.stringify(ig.errorMessage));
+    }
+
     t.is(results.errors.length, 1, "return correct number of errors");
     t.is(results.ignored.length, 0, "return correct number of ignored");
     t.is(results.passed.length, 5, "return correct number of passed assertions");
@@ -34,6 +38,10 @@ test("schematron function support", async (t) => {
     t.true(Array.isArray(results.ignored), "return ignored array");
     t.true(Array.isArray(results.passed), "return passed array");
     t.true(Array.isArray(results.warnings), "return warnings array");
+
+    for (const ig of results.ignored) {
+        t.fail("[" + ig.assertionId + "]: " + JSON.stringify(ig.errorMessage));
+    }
 
     t.is(results.errors.length, 0, "return correct number of errors");
     t.is(results.ignored.length, 0, "return correct number of ignored");

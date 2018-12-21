@@ -11,23 +11,24 @@ export namespace xpath {
 // tslint:disable-next-line:no-namespace
 export declare namespace xpath {
 
-    export type XPathType = xpath.XString | xpath.XNumber | xpath.XNodeSet | xpath.XBoolean;
+    export type XPathType = XString | XNumber | XNodeSet | XBoolean | XSequence<IValueExpression>;
 
     // tslint:disable-next-line:interface-name
     export interface XPathFunction {
-        <R extends XPathType>(c: xpath.XPathContext): R;
-        <P0 extends XPathType, R extends XPathType>(c: xpath.XPathContext, p0: P0): R;
-        <P0 extends XPathType, P1 extends XPathType, R extends XPathType>(c: xpath.XPathContext, p0: P0, p1: P1): R;
+        <R extends XPathType>(c: XPathContext): R;
+        <P0 extends IValueExpression, R extends XPathType>(c: XPathContext, p0: P0): R;
         // tslint:disable-next-line:max-line-length
-        <P0 extends XPathType, P1 extends XPathType, P2 extends XPathType, R extends XPathType>(c: xpath.XPathContext, p0: P0, p1: P2, p2: P2): R;
+        <P0 extends IValueExpression, P1 extends IValueExpression, R extends XPathType>(c: XPathContext, p0: P0, p1: P1): R;
+        // tslint:disable-next-line:max-line-length
+        <P0 extends IValueExpression, P1 extends IValueExpression, P2 extends IValueExpression, R extends XPathType>(c: XPathContext, p0: P0, p1: P2, p2: P2): R;
 
-        <P extends XPathType, R extends XPathType>(c: xpath.XPathContext, ...r: P[]): R;
+        <P extends IValueExpression, R extends XPathType>(c: XPathContext, ...r: P[]): R;
         // tslint:disable-next-line:max-line-length
-        <P0 extends XPathType, P extends XPathType, R extends XPathType>(c: xpath.XPathContext, p0: P0, ...r: P[]): R;
+        <P0 extends IValueExpression, P extends IValueExpression, R extends XPathType>(c: XPathContext, p0: P0, ...r: P[]): R;
         // tslint:disable-next-line:max-line-length
-        <P0 extends XPathType, P1 extends XPathType, P extends XPathType, R extends XPathType>(c: xpath.XPathContext, p0: P0, p1: P1, ...r: P[]): R;
+        <P0 extends IValueExpression, P1 extends IValueExpression, P extends IValueExpression, R extends XPathType>(c: XPathContext, p0: P0, p1: P1, ...r: P[]): R;
         // tslint:disable-next-line:max-line-length
-        <P0 extends XPathType, P1 extends XPathType, P2 extends XPathType, P extends XPathType, R extends XPathType>(c: xpath.XPathContext, p0: P0, p1: P1, p2: P2, ...r: P[]): R;
+        <P0 extends IValueExpression, P1 extends IValueExpression, P2 extends IValueExpression, P extends IValueExpression, R extends XPathType>(c: XPathContext, p0: P0, p1: P1, p2: P2, ...r: P[]): R;
     }
 
     export interface IXPathNSResolver {
@@ -170,10 +171,25 @@ export declare namespace xpath {
 
     export interface IExpression {
         toString(): string;
-        evaluate(c?: XPathContext): IExpression;
+        evaluate(c?: XPathContext): IValueExpression;
     }
 
-    abstract class ITypeExpression implements IExpression {
+    export interface IValueExpression {
+        toString(): string;
+        evaluate(c?: XPathContext): IValueExpression;
+
+        string(): XString;
+        number(): XNumber;
+        bool(): XBoolean;
+        nodeset(): XNodeSet;
+        stringValue(): string;
+        numberValue(): number;
+        booleanValue(): boolean;
+        equals(r: ITypeExpression): XBoolean;
+        notequal(r: ITypeExpression): XBoolean;
+    }
+
+    abstract class ITypeExpression implements IValueExpression {
         public toString(): string;
         public evaluate(c?: XPathContext): this;
 
@@ -195,6 +211,7 @@ export declare namespace xpath {
     }
 
     export class XString extends ITypeExpression {
+        protected str: string;
         public constructor(s?: string | number | boolean);
     }
     export class XBoolean extends ITypeExpression {
@@ -202,6 +219,7 @@ export declare namespace xpath {
         public not(): XBoolean;
     }
     export class XNumber extends ITypeExpression {
+        protected num: number;
         public constructor(s?: string | number | boolean);
         public negate(): XNumber;
         public plus(r: XNumber): XNumber;
@@ -267,7 +285,7 @@ export declare namespace xpath {
         isHTML?: boolean;
     }
     export interface IXPathEvaluator {
-        evaluate<T extends ITypeExpression>(options: IXPathEvaluatorOptions): T;
+        evaluate<T extends IValueExpression>(options: IXPathEvaluatorOptions): T;
         evaluateNumber(options: IXPathEvaluatorOptions): number;
         evaluateString(options: IXPathEvaluatorOptions): string;
         evaluateBoolean(options: IXPathEvaluatorOptions): boolean;
@@ -279,7 +297,254 @@ export declare namespace xpath {
     export function parse(input: string): IXPathEvaluator;
 }
 
+// tslint:disable-next-line:no-namespace
+export namespace xpath {
+    export class XDecimal extends XNumber {
+        public readonly decimalCount: number;
+        public constructor(s?: string | number | boolean) {
+            super(s);
+            const str = typeof s === "string" ? s : super.toString();
+            const p = str.indexOf(".");
+            this.decimalCount = p === -1 ? 0 : str.length - 1 - p;
+        }
+
+        public toString() {
+            const s = this.num.toFixed(this.decimalCount);
+            if (s.indexOf("e")) {
+                return super.toString();
+            }
+            return s;
+        }
+    }
+
+    export class XFloat extends XNumber {
+        public constructor(s?: string | number | boolean) {
+            super(s);
+        }
+    }
+
+    export class XDouble extends XNumber {
+        public constructor(s?: string | number | boolean) {
+            super(s);
+        }
+    }
+
+    export class XSequence<T extends IValueExpression> implements IValueExpression {
+        public readonly items: T[];
+        public readonly size: number;
+        protected evaluated: boolean = false;
+        public constructor(items: Iterable<T>) {
+            this.items = Array.from(items);
+            this.size = this.items.length;
+        }
+
+        public toString(): string {
+            return "(" + this.items.map((x) => x.toString()).join(", ") + ")";
+        }
+        public evaluate(c?: XPathContext | undefined): IValueExpression {
+            if (this.evaluated) {
+                return this;
+            }
+            const s = new XSequence(this.items.map((x) => x.evaluate(c)));
+            s.evaluated = true;
+            return s;
+        }
+
+        public string(): XString {
+            return new XString(this.toString());
+        }
+        public number(): XNumber {
+            return new XNumber(this.items.length);
+        }
+        public bool(): XBoolean {
+            return new XBoolean(this.items.length ? true : false);
+        }
+        public nodeset(): XNodeSet {
+            throw new TypeError("Can not convert sequence to nodeset");
+        }
+        public stringValue(): string {
+            return this.toString();
+        }
+        public numberValue(): number {
+            return this.items.length;
+        }
+        public booleanValue(): boolean {
+            return this.items.length ? true : false;
+        }
+        public equals(r: ITypeExpression): XBoolean {
+            if (r instanceof XSequence) {
+                return new XBoolean(this.size === r.size && this.items.every((x, i) => {
+                    const v = r.items[i];
+                    if (typeof (v as any).equals === "function") {
+                        return (v as any).equals(x).booleanValue();
+                    }
+                    if (typeof (x as any).equals === "function") {
+                        return (x as any).equals(v).booleanValue();
+                    }
+                    return false;
+                }));
+            }
+            if (this.size === 1) {
+                const v = this.items[0];
+                if (typeof (v as any).equals === "function") {
+                    return (v as any).equals(r);
+                }
+                if (typeof (r as any).equals === "function") {
+                    return (r as any).equals(v);
+                }
+            }
+            return new XBoolean(false);
+        }
+        public notequal(r: ITypeExpression): XBoolean {
+            return this.equals(r);
+        }
+    }
+}
+
 // const xpath = hiddenXpath as unknown as typeof XPathExports;
+
+function xsdecimal(c: xpath.XPathContext, v: xpath.XPathType) {
+    return new xpath.XDecimal(Math.round(v.evaluate(c).numberValue()));
+}
+
+function xsstring(c: xpath.XPathContext, v: xpath.XPathType): xpath.XString {
+    return v.evaluate(c).string();
+}
+
+function xsnormalizedString(c: xpath.XPathContext, v: xpath.XPathType): xpath.XString {
+    const s = v.evaluate(c).string();
+    (s as any).str = (s as any).str.trim().replace(/\s+/g, " ");
+    return s;
+}
+
+function binaryString(c: xpath.XPathContext, v: xpath.XPathType) {
+    const s = v.evaluate(c).string();
+    (s as any).str = (s as any).str.trim().replace(/\s+/g, "");
+    return s;
+}
+
+function stringSeq(c: xpath.XPathContext, v: xpath.XPathType) {
+    const s = ((xsnormalizedString(c, v) as any).str.split(" ") as string[])
+        .map((x) => new xpath.XString(x));
+    return new xpath.XSequence(s);
+}
+
+const stdFuncsXs = {
+
+    date: xsnormalizedString,
+    dateTime: xsnormalizedString,
+    duration: xsnormalizedString,
+    gDay: xsnormalizedString,
+    gMonth: xsnormalizedString,
+    gMonthDay: xsnormalizedString,
+    gYear: xsnormalizedString,
+    gYearMonth: xsnormalizedString,
+    time: xsnormalizedString,
+
+    boolean: (c: xpath.XPathContext, v: xpath.XPathType) => v.evaluate(c).bool(),
+
+    base64Binary: binaryString,
+    hexBinary: binaryString,
+
+    double: (c: xpath.XPathContext, v: xpath.XPathType) => new xpath.XDouble(v.evaluate(c).numberValue()),
+    float: (c: xpath.XPathContext, v: xpath.XPathType) => new xpath.XFloat(v.evaluate(c).numberValue()),
+
+    anyURI: xsnormalizedString,
+
+    NOTATION: xsnormalizedString,
+    QName: xsnormalizedString,
+
+    ENTITY: xsnormalizedString,
+    ID: xsnormalizedString,
+    IDREF: xsnormalizedString,
+    NCName: xsnormalizedString,
+    NMTOKEN: xsnormalizedString,
+    Name: xsnormalizedString,
+    language: xsnormalizedString,
+    normalizedString: xsnormalizedString,
+    string: xsstring,
+    token: xsnormalizedString,
+
+    ENTITIES: stringSeq,
+    IDREFS: stringSeq,
+    NMTOKENS: stringSeq,
+
+    decimal: xsdecimal,
+    integer: xsdecimal,
+
+    nagativeInteger: xsdecimal,
+    nonPositiveInteger: xsdecimal,
+
+    byte: xsdecimal,
+    int: xsdecimal,
+    long: xsdecimal,
+    short: xsdecimal,
+
+    nonNegativeInteger: xsdecimal,
+    positiveInteger: xsdecimal,
+    unsignedByte: xsdecimal,
+    unsignedInt: xsdecimal,
+    unsignedLong: xsdecimal,
+    unsignedShort: xsdecimal,
+
+    dateTimeStamp: xsnormalizedString,
+    dayTimethDuration: xsnormalizedString,
+    untypedAtomic: xsnormalizedString,
+    yearMonthDuration: xsnormalizedString,
+
+    numeric: (c: xpath.XPathContext, v: xpath.XPathType) => {
+        const n = v.evaluate(c).number();
+        if (n instanceof xpath.XDecimal || n instanceof xpath.XDouble || n instanceof xpath.XFloat) {
+            return n;
+        }
+        return new xpath.XDouble(n.numberValue());
+    },
+
+    error: (c: xpath.XPathContext, v: xpath.XPathType) => {
+        const e = v && v.evaluate(c);
+        if (e instanceof xpath.XSequence && e.size === 0) {
+            return e;
+        }
+        throw new Error("xs:error constructor found");
+    },
+};
+
+function createNodeSet(...nodes: Node[]) {
+    const n = new xpath.XNodeSet();
+    (n as any).size = 1;
+    (n as any).nodes.push(...nodes);
+    return n;
+}
+
+const stdFuncsFn = {
+    "node-name": (c: xpath.XPathContext, v?: xpath.XNodeSet) => {
+        const vv = v ? v.evaluate(c).nodeset() : createNodeSet(c.contextNode as Node);
+        if (vv.size === 0) {
+            return new xpath.XSequence([]);
+        }
+        if (vv.size !== 1) {
+            throw new Error("Function `node-name` should refer to only one element");
+        }
+        const n = (vv as any).nodes[0] as Node;
+        return new xpath.XString(n.nodeName);
+    },
+
+    "nilled": (c: xpath.XPathContext, v?: xpath.XNodeSet) => {
+        const vv = v ? v.evaluate(c).nodeset() : createNodeSet(c.contextNode as Node);
+        if (vv.size === 0) {
+            return new xpath.XSequence([]);
+        }
+        if (vv.size !== 1) {
+            throw new Error("Function `nilled` should refer to only one element");
+        }
+        const n = (vv as any).nodes[0] as Node;
+        const b = n.nodeType === 1 &&
+            (n as Element).getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "nil")
+            || false;
+        return new xpath.XBoolean(b);
+    },
+    // TODO: https://www.w3.org/TR/xpath-functions/#func-node-name
+};
 
 const stdAddStandardFunctions = xpath.FunctionResolver.prototype.addStandardFunctions;
 xpath.FunctionResolver.prototype.addStandardFunctions =
@@ -290,6 +555,19 @@ xpath.FunctionResolver.prototype.addStandardFunctions =
             const ln = f.substring(2);
             ths.functions["{http://www.w3.org/2001/XMLSchema-datatypes}" + ln] = ths.functions[f];
             ths.functions["{http://www.w3.org/2001/XMLSchema}" + ln] = ths.functions[f];
+        }
+
+        for (const ln of Object.keys(stdFuncsXs) as Array<keyof typeof stdFuncsXs>) {
+            const f = stdFuncsXs[ln] as xpath.XPathFunction;
+            ths.functions["{}" + ln] = f;
+            ths.functions["{http://www.w3.org/2001/XMLSchema-datatypes}" + ln] = f;
+            ths.functions["{http://www.w3.org/2001/XMLSchema}" + ln] = f;
+        }
+
+        for (const ln of Object.keys(stdFuncsFn) as Array<keyof typeof stdFuncsXs>) {
+            const f = stdFuncsXs[ln] as xpath.XPathFunction;
+            ths.functions["{}" + ln] = f;
+            ths.functions["{http://www.w3.org/2005/xpath-functions}" + ln] = f;
         }
     };
 

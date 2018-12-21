@@ -117,17 +117,18 @@ function processFunction(t: IFunction): (c: xpath.XPathContext, ...r: xpath.XPat
         // cast parameters types
         for (let i = 0; i < args.length; i++) {
             const p = t.params[i];
-            switch (p.type && p.type.replace(/^.+:/, "")) {
-                case "number":
-                case "decimal":
-                    args[i] = args[i].number();
-                    break;
-                case "string":
-                    args[i] = args[i].string();
-                    break;
-                case "boolean":
-                    args[i] = args[i].bool();
-                    break;
+            if (p.type) {
+                const pos = p.type.indexOf(":");
+                const ns = pos === -1 ? "" : c.namespaceResolver.getNamespace(
+                    p.type.substring(0, pos),
+                    c.contextNode as Node,
+                );
+                const ln = pos === -1 ? p.type : p.type.substring(pos + 1);
+                const fn = c.functionResolver.getFunction(ln, ns || "");
+                if (!fn) {
+                    throw new Error("Can not find parameter cast function " + JSON.stringify(p.type));
+                }
+                args[i] = fn(c, args[i]).evaluate(c) as xpath.XPathType;
             }
         }
 
@@ -155,7 +156,7 @@ function processFunction(t: IFunction): (c: xpath.XPathContext, ...r: xpath.XPat
                             variables: c2.variableResolver,
 
                             node: c2.contextNode,
-                        });
+                        }) as xpath.XPathType;
                         computedVars.set(ln, ret);
                         return ret;
                     }
@@ -183,19 +184,20 @@ function processFunction(t: IFunction): (c: xpath.XPathContext, ...r: xpath.XPat
 
                 node: c2.contextNode,
             });
-            switch (ret && t.type && t.type.replace(/^.+:/, "")) {
-                case "number":
-                case "decimal":
-                    ret = ret.number();
-                    break;
-                case "string":
-                    ret = ret.string();
-                    break;
-                case "boolean":
-                    ret = ret.bool();
-                    break;
+            if (ret && t.type) {
+                const pos = t.type.indexOf(":");
+                const ns = pos === -1 ? "" : c.namespaceResolver.getNamespace(
+                    t.type.substring(0, pos),
+                    c.contextNode as Node,
+                );
+                const ln = pos === -1 ? t.type : t.type.substring(pos + 1);
+                const fn = c.functionResolver.getFunction(ln, ns || "");
+                if (!fn) {
+                    throw new Error("Can not find return cast function " + JSON.stringify(t.type));
+                }
+                ret = fn(c, ret).evaluate(c);
             }
-            return ret;
+            return ret as xpath.XPathType;
         }
     };
 }
