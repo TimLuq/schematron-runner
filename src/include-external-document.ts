@@ -133,7 +133,7 @@ export function loadXML(
     if (/^(?:https?|file):\/\//.test(uri)) {
         prom = options.loadXMLUrl(options, uri);
     } else {
-        prom = options.loadXMLUrl(options, uri);
+        prom = options.loadXMLFile(options, uri);
     }
     if (loadStack) {
         prom = Promise.resolve(prom).then((doc) => schematronIncludes(options, doc, uri, myLoadStack));
