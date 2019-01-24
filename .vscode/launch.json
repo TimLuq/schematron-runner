@@ -45,6 +45,20 @@
                 "<node_internals>/**/*.js",
                 "node_modules/**/*.js"
             ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Run AVA test XDR",
+            "program": "${workspaceRoot}/node_modules/ava/profile.js",
+            "args": [
+                "test/tests/test-xdr.spec.ts"
+            ],
+            "sourceMaps": true,
+            "skipFiles": [
+                "<node_internals>/**/*.js",
+                "node_modules/**/*.js"
+            ]
         }
     ]
 }

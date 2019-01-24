@@ -7,5 +7,7 @@ export {
 
 export {
     clearCache, validate, validate as default,
-    IValidateOptions, IValidationResult,
+    IValidationResult,
 } from "./validator";
+
+export { IValidateOptions } from "./common";

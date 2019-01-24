@@ -42,7 +42,7 @@ test("structure of validator result containing warnings", async (t) => {
 });
 
 test("structure of validator result without warnings", async (t) => {
-    const results = await validate(t.context.contentXML, t.context.contentSchematron, { includeWarnings: false });
+    const results = await validate(t.context.contentXML, t.context.contentSchematron, { excludeWarnings: true });
 
     t.is(typeof results, "object", "return results as an object");
 

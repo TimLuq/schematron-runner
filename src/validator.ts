@@ -2,41 +2,21 @@
 import parseSchematron, { IAssertion, IFunction, IParsedSchematron, IRule } from "./parse-schematron";
 import testAssertion, { ITestAssertionError, ITestAssertionResult } from "./test-assertion";
 
-import { loadXML, replaceTestWithExternalDocument, schematronIncludes } from "./include-external-document";
+import {
+    loadXML, loadXmlFilePoly, loadXmlUrlPoly,
+    replaceTestWithExternalDocument, schematronIncludes,
+} from "./include-external-document";
 
 import xpath from "./xpath-helper";
+
+import { IValidateOptions } from "./common";
 
 import sha1 from "./sha1";
 
 let dom: Promise<{ new(): DOMParser }>;
 
-if (typeof DOMParser === "undefined") {
-    dom = import("xmldom").then((x) => x.DOMParser);
-} else {
-    dom = Promise.resolve(DOMParser);
-}
-
 // Parsed object cache
 const parsedMap = new Map<string, Promise<IParsedSchematron>>();
-
-export interface IValidateOptions {
-    /**
-     * This determines whether or not warnings should be tested and returned.
-     * Defaults to true.
-     */
-    includeWarnings: boolean;
-
-    /**
-     * The path to a directory containing resource files (eg. voc.xml) which may be necessary for some schematron tests.
-     * Defaults to './', the current directory.
-     */
-    resourceDir: string;
-    /**
-     * An integer, which is the maximum length of the xml field in validation results.
-     * Defaults to 200. Set to 0 for unlimited length.
-     */
-    xmlSnippetMaxLength: number;
-}
 
 export function clearCache() {
     parsedMap.clear();
@@ -202,14 +182,124 @@ function processFunction(t: IFunction): (c: xpath.XPathContext, ...r: xpath.XPat
     };
 }
 
+const defaultOptionsBase = Object.freeze({
+    excludeWarnings: false,
+    resourceDir: "./",
+    xmlSnippetMaxLength: 200,
+});
+
+type SchematronDefaultOptions = Readonly<Partial<IValidateOptions> & typeof defaultOptionsBase>;
+
+const defaultOptionsPartial: SchematronDefaultOptions = defaultOptionsBase;
+
+function tc(o: any) { return typeof o; }
+
+function checkOptions(options: Partial<IValidateOptions>, handler: CheckOptionsHandler): IValidateOptions {
+    const f = <T extends keyof IValidateOptions>(k: T) => handler<T>(k, typeof options[k], options[k]);
+    if (typeof options.DOMParser !== "function" &&
+            !(typeof options.DOMParser === "object" &&
+                typeof (options.DOMParser as any).then === "function")) {
+        options.DOMParser = f("DOMParser");
+    }
+    if (typeof options.loadXMLFile !== "function") {
+        options.loadXMLFile = f("loadXMLFile");
+    }
+    if (typeof options.loadXMLUrl !== "function") {
+        options.loadXMLUrl = f("loadXMLUrl");
+    }
+    if (typeof options.resourceDir !== "string") {
+        options.resourceDir = f("resourceDir");
+    }
+    if (typeof options.excludeWarnings !== "boolean") {
+        options.excludeWarnings = f("excludeWarnings");
+    }
+    if (typeof options.xmlSnippetMaxLength !== "number" || isNaN(options.xmlSnippetMaxLength)) {
+        options.xmlSnippetMaxLength = f("xmlSnippetMaxLength");
+    }
+    return options as IValidateOptions;
+}
+
+export function polymorphicDefaults<T extends keyof IValidateOptions>(field: T, type: ReturnType<typeof tc>):
+        IValidateOptions[T] {
+    if (field in defaultOptionsBase) {
+        return (defaultOptionsBase as any)[field];
+    }
+    if (field === "DOMParser") {
+        if (!dom) {
+            if (typeof DOMParser === "undefined") {
+                dom = import("xmldom").then((x) => x.DOMParser);
+            } else {
+                dom = Promise.resolve(DOMParser);
+            }
+        }
+        return dom;
+    }
+    if (field === "loadXMLFile") {
+        return loadXmlFilePoly;
+    }
+    if (field === "loadXMLUrl") {
+        return loadXmlUrlPoly;
+    }
+}
+
+export function webDefaults<T extends keyof IValidateOptions>(field: T, type: ReturnType<typeof tc>):
+        IValidateOptions[T] {
+    if (field in defaultOptionsBase) {
+        return (defaultOptionsBase as any)[field];
+    }
+    if (field === "DOMParser") {
+        if (!dom) {
+            if (typeof DOMParser === "undefined") {
+                dom = import("xmldom").then((x) => x.DOMParser);
+            } else {
+                dom = Promise.resolve(DOMParser);
+            }
+        }
+        return dom;
+    }
+    if (field === "loadXMLFile") {
+        return function loadXMLFile() {
+            throw new Error([
+                "No implementation file loader by default.",
+                "Implement a custom loadXMLFile.",
+            ].join(" "));
+        };
+    }
+    if (field === "loadXMLUrl") {
+        return async function loadXMLUrl(options, url) {
+            if (typeof fetch === "undefined") {
+                throw new Error([
+                    "No global fetch implementation found.",
+                    "Use a newer context or implement a custom loadXMLUrl.",
+                ].join(" "));
+            }
+            const f = fetch(url);
+            const d = await options.DOMParser;
+            const r = await f;
+            const t = await r.text();
+            return new d().parseFromString(t, "application/xml");
+        };
+    }
+}
+
+export function throwDefaults<T extends keyof IValidateOptions>(
+    field: T, type: ReturnType<typeof tc>, value: any,
+): IValidateOptions[T] {
+    // tslint:disable-next-line:no-console
+    console.error("Unexpected value of type %s for option field %s:", type, JSON.stringify(field), value);
+    throw new TypeError("Unexpected value of type " + type + " for option field " + JSON.stringify(field));
+}
+
 export async function validate(xml: string, schematron: string, options?: Partial<IValidateOptions>) {
+    return validateFocused(xml, schematron, polymorphicDefaults, options);
+}
 
-    const opts = options || {};
-    const includeWarnings = opts.includeWarnings === undefined ? true : Boolean(opts.includeWarnings);
-    const resourceDir = opts.resourceDir || "./";
-    const xmlSnippetMaxLength = opts.xmlSnippetMaxLength === undefined ? 200 : opts.xmlSnippetMaxLength;
+export async function validateFocused(
+    xml: string, schematron: string, defaults: CheckOptionsHandler, options?: Partial<IValidateOptions>,
+) {
+    const opts: IValidateOptions = checkOptions(checkOptions({ ...(options || {}) }, defaults), throwDefaults);
 
-    const DOM = await dom;
+    const DOM = opts.DOMParser = await opts.DOMParser;
 
     //// read xml
     let xmlDoc: Document;
@@ -217,7 +307,7 @@ export async function validate(xml: string, schematron: string, options?: Partia
     if (xml.trim().indexOf("<") !== 0) {
         // If not valid xml, it might be a URI or filepath
         try {
-            xmlDoc = await loadXML(DOM, resourceDir, xml);
+            xmlDoc = await loadXML(opts, opts.resourceDir, xml);
         } catch (err) {
             // tslint:disable-next-line:max-line-length
             const ne = new Error("Detected URL as xml parameter, but file " + JSON.stringify(xml) + " could not be read: " + err);
@@ -234,12 +324,13 @@ export async function validate(xml: string, schematron: string, options?: Partia
     // If not validate xml, it might be a filepath
     if (schematron.trim().indexOf("<") !== 0) {
         try {
-            const lookupKey = ">>" + resourceDir + ">>" + schematron;
+            const lookupKey = ">>" + opts.resourceDir + ">>" + schematron;
             const schCch = parsedMap.get(lookupKey);
             if (schCch) {
                 parsedSchematron = schCch;
             } else {
-                parsedSchematron = loadXML(DOM, resourceDir, schematron, []).then(parseSchematron);
+                parsedSchematron = Promise.resolve(loadXML(opts, opts.resourceDir, schematron, []))
+                    .then(parseSchematron);
                 parsedMap.set(lookupKey, parsedSchematron);
             }
         } catch (err) {
@@ -253,7 +344,7 @@ export async function validate(xml: string, schematron: string, options?: Partia
         parsedSchematron = parsedMap.get(hash) || (() => {
             // Load schematron doc
             // tslint:disable-next-line:max-line-length
-            const d = schematronIncludes(DOM, new DOM().parseFromString(schematron, "application/xml"), resourceDir).then(parseSchematron);
+            const d = schematronIncludes(opts, new DOM().parseFromString(schematron, "application/xml"), opts.resourceDir).then(parseSchematron);
 
             // Cache parsed schematron
             parsedMap.set(hash, d);
@@ -335,13 +426,11 @@ export async function validate(xml: string, schematron: string, options?: Partia
     };
 
     const state: IContextState = {
+        ...opts,
         DOM,
         contexts: new Map<string, any>(),
         document: xmlDoc,
-        includeWarnings,
-        resourceDir,
         select: sel as xpath.IXPathSelect,
-        xmlSnippetMaxLength,
     };
 
     for (const [patternId, rules] of patternRuleMap.entries()) {
@@ -448,7 +537,7 @@ async function checkRule(state: IContextState, rule: IRule, ruleMap: Map<string,
             const originalTest = test;
             if (/=document\((\'[-_.A-Za-z0-9]+\'|\"[-_.A-Za-z0-9]+\")\)/.test(test)) {
                 try {
-                    test = await replaceTestWithExternalDocument(state.DOM, test, state.resourceDir);
+                    test = await replaceTestWithExternalDocument(state, test, state.resourceDir);
                 } catch (err) {
                     // console.warn("SCHEMATRON->checkRule:", err.message);
                     results.push({
@@ -467,7 +556,7 @@ async function checkRule(state: IContextState, rule: IRule, ruleMap: Map<string,
             if (originalTest !== test) {
                 simplifiedTest = test;
             }
-            if (level === "error" || state.includeWarnings) {
+            if (level === "error" || !state.excludeWarnings) {
                 const result = testAssertion(test, selected, state.select,
                         state.document, state.resourceDir, state.xmlSnippetMaxLength);
                 results.push({
@@ -507,3 +596,6 @@ function getDescription(assorext: IAssertion, result: ITestAssertionError | ITes
         return "";
     }).join(" ");
 }
+
+export type CheckOptionsHandler =
+    <T extends keyof IValidateOptions>(field: T, type: ReturnType<typeof tc>, value: any) => IValidateOptions[T];
