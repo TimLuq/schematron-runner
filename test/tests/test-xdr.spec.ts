@@ -2,7 +2,7 @@ import { default as anyTest, TestInterface } from "ava";
 
 import { readFile } from "../helpers/fs.js";
 
-import { validate } from "../../";
+import { IValidateOptions, validate } from "../../";
 
 interface ITestContext {
     contentXML: [string, string];
@@ -26,8 +26,12 @@ test.before(async (t) => {
     t.context.contentXML = [r[1], r[2]];
 });
 
+const options: Partial<IValidateOptions> = {
+    resourceDir: "./test/fixtures/xdr/",
+};
+
 test("ccda xdr test 1", async (t) => {
-    const results = await validate(t.context.contentXML[0], t.context.contentSchematron);
+    const results = await validate(t.context.contentXML[0], t.context.contentSchematron, options);
 
     t.is(typeof results, "object", "return results as an object");
 
@@ -37,13 +41,18 @@ test("ccda xdr test 1", async (t) => {
     t.true(Array.isArray(results.warnings), "return warnings array");
 
     t.is(results.errors.length, 0, "return correct number of errors");
+    if (results.ignored.length !== 0) {
+        for (const ig of results.ignored) {
+            t.log("Ignored: ", ig);
+        }
+    }
     t.is(results.ignored.length, 0, "return correct number of ignored");
-    t.is(results.passed.length, 25, "return correct number of passed assertions");
+    t.is(results.passed.length, 68, "return correct number of passed assertions");
     t.is(results.warnings.length, 15, "return correct number of warnings");
 });
 
 test("ccda xdr test 2", async (t) => {
-    const results = await validate(t.context.contentXML[1], t.context.contentSchematron);
+    const results = await validate(t.context.contentXML[1], t.context.contentSchematron, options);
 
     t.is(typeof results, "object", "return results as an object");
 
@@ -52,8 +61,8 @@ test("ccda xdr test 2", async (t) => {
     t.true(Array.isArray(results.passed), "return passed array");
     t.true(Array.isArray(results.warnings), "return warnings array");
 
-    t.is(results.errors.length, 16, "return correct number of errors");
-    t.is(results.ignored.length, 1, "return correct number of ignored");
+    t.is(results.errors.length, 7, "return correct number of errors");
+    t.is(results.ignored.length, 0, "return correct number of ignored");
     t.is(results.passed.length, 25, "return correct number of passed assertions");
     t.is(results.warnings.length, 15, "return correct number of warnings");
 });

@@ -164,6 +164,9 @@ export declare namespace xpath {
         public caseInsensitive?: boolean;
         public allowAnyNamespaceForNoPrefix?: boolean;
 
+        public callbackError?: (code: string | null, description?: string, errorObject?: any) => void;
+        public callbackTrace?: (value: any, label?: string) => void;
+
         public constructor(vr?: VariableResolver, nr?: NamespaceResolver, fr?: FunctionResolver);
 
         public extend<T extends object>(newProps: T): XPathContext & T;
@@ -357,7 +360,7 @@ export namespace xpath {
             return new XNumber(this.items.length);
         }
         public bool(): XBoolean {
-            return new XBoolean(this.items.length ? true : false);
+            return toBool(this.items.length ? true : false);
         }
         public nodeset(): XNodeSet {
             throw new TypeError("Can not convert sequence to nodeset");
@@ -373,7 +376,7 @@ export namespace xpath {
         }
         public equals(r: ITypeExpression): XBoolean {
             if (r instanceof XSequence) {
-                return new XBoolean(this.size === r.size && this.items.every((x, i) => {
+                return toBool(this.size === r.size && this.items.every((x, i) => {
                     const v = r.items[i];
                     if (typeof (v as any).equals === "function") {
                         return (v as any).equals(x).booleanValue();
@@ -393,7 +396,7 @@ export namespace xpath {
                     return (r as any).equals(v);
                 }
             }
-            return new XBoolean(false);
+            return FALSE;
         }
         public notequal(r: ITypeExpression): XBoolean {
             return this.equals(r);
@@ -509,6 +512,13 @@ const stdFuncsXs = {
     },
 };
 
+const TRUE = new xpath.XBoolean(true);
+const FALSE = new xpath.XBoolean(false);
+
+export function toBool(b: boolean) {
+    return b ? TRUE : FALSE;
+}
+
 function createNodeSet(...nodes: Node[]) {
     const n = new xpath.XNodeSet();
     (n as any).size = 1;
@@ -516,7 +526,122 @@ function createNodeSet(...nodes: Node[]) {
     return n;
 }
 
+function numericsametype<T extends xpath.XDecimal | xpath.XDouble | xpath.XFloat | xpath.XNumber>(v: T, a: number): T {
+    if (v instanceof xpath.XDouble) {
+        return new xpath.XDouble(a) as T;
+    }
+    if (v instanceof xpath.XFloat) {
+        return new xpath.XFloat(a) as T;
+    }
+    if (v instanceof xpath.XDecimal) {
+        return new xpath.XDecimal(a) as T;
+    }
+    return new xpath.XNumber(a) as T;
+}
+
+function getFirstNode(nodes: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet): Node | undefined {
+    let node;
+    const x = nodes;
+    if (x instanceof xpath.XNodeSet) {
+        node = x.toUnsortedArray()[0];
+    } else if (x instanceof xpath.XSequence) {
+        node = x.items[0] as Node | xpath.XNodeSet;
+        if (node instanceof xpath.XNodeSet) {
+            node = node.toUnsortedArray()[0];
+        }
+    } else {
+        throw new TypeError("fn:name expected a sequence of nodes");
+    }
+    return node;
+}
+
+function buildPath(node: Node, suffix: string): string {
+    const p = node.parentNode;
+    if (!p) {
+        return suffix;
+    }
+    let match;
+    if (node.nodeType === 1) {
+        match = (n: Node) => {
+            const e = n as Element;
+            return `Q{${e.namespaceURI || ""}}${e.localName}`;
+        };
+    } else if (node.nodeType === 2) {
+        const e = node as Attr;
+        const ns = e.namespaceURI;
+        if (ns) {
+            return buildPath(p, `/@Q{${ns}}${e.localName}`);
+        } else {
+            return buildPath(p, `/@${e.localName}`);
+        }
+    } else if (node.nodeType === 3) {
+        match = (n: Node) => {
+            return `text()`;
+        };
+    } else if (node.nodeType === 7) {
+        match = (n: Node) => {
+            const e = n as ProcessingInstruction;
+            return `processing-instruction(${e.nodeName})`;
+        };
+    } else if (node.nodeType === 8) {
+        match = (n: Node) => {
+            return `comment()`;
+        };
+    } else {
+        throw new Error("Cannot build a path though a node of type " + node.nodeType);
+    }
+    const r = match(node);
+    let c = 1;
+    let x = node;
+    // tslint:disable-next-line:no-conditional-assignment
+    while (x = x.previousSibling as Node) {
+        if (node.nodeType === x.nodeType && match(x) === r) {
+            c++;
+        }
+    }
+    return buildPath(p, `/${r}[${c}]${suffix}`);
+}
+
+/**
+ * https://www.w3.org/TR/xpath-functions/#func-format-number
+ * @param n value
+ * @param p picture
+ */
+function formatNumber(n: number, p: string) {
+    let b = "";
+    const s = n.toFixed(0).replace(/\..*$/, "");
+    let p0 = s.length;
+    let p1 = p.length;
+    while (p1--) {
+        const cr = p.charCodeAt(p1);
+        if (cr >= 0x30 && cr <= 0x39) {
+            if (p0) {
+                p0 -= 1;
+                b = s.charAt(p0) + b;
+            } else {
+                b = "0" + b;
+            }
+        } else if (cr === 0x23) {
+            if (p0) {
+                p0 -= 1;
+                b = s.charAt(p0) + b;
+            } else {
+                break;
+            }
+        } else {
+            b = p.charAt(p1) + b;
+        }
+    }
+    if (p0) {
+        b = s.substring(0, p0) + b;
+    }
+    return b.replace(/^[^0-9]+/, "");
+}
+
 const stdFuncsFn = {
+
+    // Accessors
+
     "node-name": (c: xpath.XPathContext, v?: xpath.XNodeSet) => {
         const vv = v ? v.evaluate(c).nodeset() : createNodeSet(c.contextNode as Node);
         if (vv.size === 0) {
@@ -541,9 +666,694 @@ const stdFuncsFn = {
         const b = n.nodeType === 1 &&
             (n as Element).getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "nil")
             || false;
-        return new xpath.XBoolean(b);
+        return b ? TRUE : FALSE;
     },
-    // TODO: https://www.w3.org/TR/xpath-functions/#func-node-name
+
+    // Errors and diagnostics
+
+    "error": (
+        c: xpath.XPathContext, code?: xpath.IValueExpression,
+        description?: xpath.XString, errorObject?: xpath.IValueExpression) => {
+            const tc = (code && code.toString()) || null;
+            const td = description && description.toString();
+            const ucb = c.callbackError;
+            if (typeof ucb === "function") {
+                ucb(tc, td, errorObject);
+            } else {
+                const em = tc !== null
+                    ? (typeof td === "string" ? tc + ": " + td : tc)
+                    : (td || "");
+                const err = new Error(em);
+                (err as any).code = tc;
+                throw err;
+            }
+    },
+
+    "trace": (c: xpath.XPathContext, value: xpath.IValueExpression, label?: xpath.XString) => {
+        const v = value.evaluate(c);
+        const l = label && label.evaluate().toString();
+        const ucb = c.callbackTrace;
+        if (typeof ucb === "function") {
+            ucb(v, l);
+        }
+        return v;
+    },
+
+    // Functions on numeric values
+
+    "abs": (c: xpath.XPathContext, value: xpath.XNumber | xpath.XDouble | xpath.XDecimal | xpath.XFloat) => {
+        const v = value.evaluate(c);
+        const n = v.numberValue();
+        const a = Math.abs(n);
+        if (n === a) {
+            return v;
+        }
+        return numericsametype(v, a);
+    },
+
+    "ceiling": (c: xpath.XPathContext, value: xpath.XNumber | xpath.XDouble | xpath.XDecimal | xpath.XFloat) => {
+        const v = value.evaluate(c);
+        const n = v.numberValue();
+        const a = Math.ceil(n);
+        if (n === a) {
+            return v;
+        }
+        return numericsametype(v, a);
+    },
+
+    "floor": (c: xpath.XPathContext, value: xpath.XNumber | xpath.XDouble | xpath.XDecimal | xpath.XFloat) => {
+        const v = value.evaluate(c);
+        const n = v.numberValue();
+        const a = Math.floor(n);
+        if (n === a) {
+            return v;
+        }
+        return numericsametype(v, a);
+    },
+
+    "round": (
+            c: xpath.XPathContext,
+            value: xpath.XNumber | xpath.XDouble | xpath.XDecimal | xpath.XFloat,
+            precision?: xpath.XNumber) => {
+        const v = value.evaluate(c);
+        const n = v.numberValue();
+        const p = Math.pow(10, Math.round((precision && precision.evaluate(c).numberValue()) || 0));
+        const a = Math.round(n * p) / p;
+        if (n === a) {
+            return v;
+        }
+        return numericsametype(v, a);
+    },
+
+    "round-half-to-even": (
+            c: xpath.XPathContext,
+            value: xpath.XNumber | xpath.XDouble | xpath.XDecimal | xpath.XFloat,
+            precision?: xpath.XNumber) => {
+        const v = value.evaluate(c);
+        const n = v.numberValue();
+        const p = Math.pow(10, Math.round((precision && precision.evaluate(c).numberValue()) || 0));
+        const f = Math.floor(n * p) / p;
+        // tslint:disable-next-line:no-bitwise
+        const a = f + (0.5 * p) !== n ? Math.round(n * p) / p : f + (Math.round((f / p)) & 1) * p;
+        // TODO: validate that the above line is correct
+        if (n === a) {
+            return v;
+        }
+        return numericsametype(v, a);
+    },
+
+    // Parsing numbers
+
+    "number": (
+            c: xpath.XPathContext,
+            arg?: xpath.IValueExpression) => {
+        if (!arg) {
+            const n = c.contextNode;
+            return new xpath.XDouble((n && n.textContent) || undefined);
+        } else {
+            const v = arg.evaluate(c);
+            if (v instanceof xpath.XDouble) {
+                return v;
+            }
+            const n = v.numberValue();
+            const a = isNaN(n) ? parseFloat(v.stringValue()) : n;
+            return new xpath.XDouble(a);
+        }
+    },
+
+    // Formatting numbers
+
+    "format-integer": (
+            c: xpath.XPathContext,
+            value: xpath.XNumber, picture: xpath.XString,
+            // lang?: xpath.XString
+    ) => {
+        value = value.evaluate(c);
+        if (value instanceof xpath.XSequence) {
+            if (value.items.length === 0) {
+                return new xpath.XString("");
+            }
+            throw new Error("Unexpected non-empty sequence for value in format-integer.");
+        }
+        const n = Math.round(value.numberValue());
+        if (isNaN(n) || !isFinite(n)) {
+            return new xpath.XString(n.toString());
+        }
+        const p = picture.evaluate(c).stringValue();
+        let b = "";
+        if (p === "A") {
+            for (let i = n; i !== 0; i = Math.floor(i / 26)) {
+                b = String.fromCharCode(0x41 + (i % 26)) + b;
+            }
+        } else if (p === "a") {
+            for (let i = n; i !== 0; i = Math.floor(i / 26)) {
+                b = String.fromCharCode(0x61 + (i % 26)) + b;
+            }
+        } else if (p === "i" || p === "I" || p === "w" || p === "W" || p === "Ww") {
+            throw new Error("Roman numerals and words are not implemented for format-integer");
+        } else if (/^((\p{Nd}|#|[^\p{N}\p{L}])+?)$/.test(p)) {
+            b = formatNumber(n, p);
+        } else {
+            throw new Error("Unknown format code " + JSON.stringify(p) + " for format-integer");
+        }
+
+        return new xpath.XString(b);
+    },
+
+    "format-number": (
+            c: xpath.XPathContext,
+            value: xpath.XNumber, picture: xpath.XString,
+            // lang?: xpath.XString
+    ) => {
+        value = value.evaluate(c);
+        if (value instanceof xpath.XSequence) {
+            if (value.items.length === 0) {
+                return new xpath.XString("");
+            }
+            throw new Error("Unexpected non-empty sequence for value in format-integer.");
+        }
+        const n = Math.round(value.numberValue());
+        if (isNaN(n) || !isFinite(n)) {
+            return new xpath.XString(n.toString());
+        }
+        const p = picture.evaluate(c).stringValue();
+        return new xpath.XString(formatNumber(n, p));
+    },
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#func-random-number-generator
+
+    // Functions to assemble and disassemble strings
+
+    "codepoints-to-string": (
+        c: xpath.XPathContext,
+        arg: xpath.XNumber | xpath.XSequence<xpath.XNumber>,
+    ) => {
+        arg = arg.evaluate(c) as xpath.XNumber | xpath.XSequence<xpath.XNumber>;
+        const items = (arg instanceof xpath.XSequence) ? arg.items.map((v) => v.numberValue()) : [arg.numberValue()];
+        const b = String.fromCharCode(...items);
+        return new xpath.XString(b);
+    },
+
+    "string-to-codepoints": (
+        c: xpath.XPathContext,
+        arg: xpath.XString,
+    ) => {
+        const s = arg.evaluate(c).stringValue();
+        const l = s.length;
+        const u: xpath.XNumber[] = [];
+        u.length = l;
+        const cache = new Map<number, xpath.XNumber>();
+        for (let i = 0; i < l; i++) {
+            const x = s.charCodeAt(i);
+            let y = cache.get(x);
+            if (!y) {
+                y = new xpath.XNumber(x);
+                cache.set(x, y);
+            }
+            u[i] = y;
+        }
+        return new xpath.XSequence(u);
+    },
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#string-compare
+
+    "concat" : (
+            c: xpath.XPathContext,
+            ...args: xpath.IValueExpression[]) => {
+        return args.map((x) => x.evaluate(c).stringValue()).join("");
+    },
+
+    "string-join" : (
+        c: xpath.XPathContext,
+        arg1: xpath.XSequence<xpath.IValueExpression>,
+        arg2?: xpath.XString,
+    ) => {
+        return (arg1.evaluate(c) as xpath.XSequence<xpath.IValueExpression>)
+            .items.map((x) => x.evaluate(c).stringValue()).join((arg2 && arg2.evaluate(c).stringValue()) || "");
+    },
+
+    "substring" : (
+        c: xpath.XPathContext,
+        sourceString: xpath.XString,
+        start: xpath.XDouble,
+        length?: xpath.XDouble,
+    ) => {
+        const s = sourceString.evaluate(c).stringValue();
+        const st = start.evaluate(c).numberValue();
+        const sp = length ? length.evaluate(c).numberValue() : s.length - st;
+        return new xpath.XString(s.substring(st, sp));
+    },
+
+    "string-length" : (
+        c: xpath.XPathContext,
+        arg?: xpath.XString,
+    ) => {
+        const s = arg ? arg.evaluate(c).stringValue() : (c.contextNode && c.contextNode.textContent) || "";
+        return new xpath.XNumber(s.length);
+    },
+
+    "normalize-space" : (
+        c: xpath.XPathContext,
+        arg?: xpath.XString,
+    ) => {
+        const s = arg ? arg.evaluate(c).stringValue() : (c.contextNode && c.contextNode.textContent) || "";
+        return new xpath.XString(s.trim().replace(/\s+/g, " "));
+    },
+
+    "normalize-unicode" : (
+        c: xpath.XPathContext,
+        arg: xpath.XString,
+        normalizationForm?: xpath.XString,
+    ) => {
+        const s = arg.evaluate(c).stringValue();
+        const f = normalizationForm ? normalizationForm.stringValue().trim() : "NFC";
+        return new xpath.XString(s.normalize(f));
+    },
+
+    "upper-case" : (
+        c: xpath.XPathContext,
+        arg: xpath.XString,
+    ) => {
+        const s = arg.evaluate(c).stringValue();
+        return new xpath.XString(s.toUpperCase());
+    },
+
+    "lower-case" : (
+        c: xpath.XPathContext,
+        arg: xpath.XString,
+    ) => {
+        const s = arg.evaluate(c).stringValue();
+        return new xpath.XString(s.toLowerCase());
+    },
+
+    "translate" : (
+        c: xpath.XPathContext,
+        arg: xpath.XString,
+        mapString: xpath.XString,
+        transString: xpath.XString,
+    ) => {
+        const s = arg.evaluate(c).stringValue();
+        const m = mapString.evaluate(c).stringValue();
+        const t = transString.evaluate(c).stringValue();
+        let b = "";
+        for (let i = 0; i < s.length; i++) {
+            const h = s.charAt(i);
+            const p = m.indexOf(h);
+            if (p === -1) {
+                b += h;
+            } else {
+                b += t.charAt(p);
+            }
+        }
+        return new xpath.XString(b);
+    },
+
+    // Functions based on substring matching
+
+    "contains": (
+        c: xpath.XPathContext,
+        arg1: xpath.XString,
+        arg2: xpath.XString,
+    ) => {
+        const s = arg1.evaluate(c).stringValue();
+        const t = arg2.evaluate(c).stringValue();
+        return toBool(t.length === 0 || s.indexOf(t) !== -1);
+    },
+
+    "starts-with": (
+        c: xpath.XPathContext,
+        arg1: xpath.XString,
+        arg2: xpath.XString,
+    ) => {
+        const s = arg1.evaluate(c).stringValue();
+        const t = arg2.evaluate(c).stringValue();
+        return toBool(t.length === 0 || s.indexOf(t) === 0);
+    },
+
+    "ends-with": (
+        c: xpath.XPathContext,
+        arg1: xpath.XString,
+        arg2: xpath.XString,
+    ): xpath.XBoolean => {
+        const t = arg2.evaluate(c).stringValue();
+        const l = t.length;
+        if (l === 0) {
+            return TRUE;
+        }
+        const s = arg1.evaluate(c).stringValue();
+        const p = s.indexOf(t);
+
+        return toBool(p !== -1 && p === s.length - l);
+    },
+
+    "substring-before": (
+        c: xpath.XPathContext,
+        arg1: xpath.XString,
+        arg2: xpath.XString,
+        collation?: xpath.XString,
+    ) => {
+        if (collation) {
+            // TODO?
+            throw new Error("substring-before has an unimplemented overload using collation");
+        }
+        const t = arg2.evaluate(c).stringValue();
+        const l = t.length;
+        if (l === 0) {
+            return arg1;
+        }
+        const s = arg1.evaluate(c).stringValue();
+        const p = s.indexOf(t);
+        return new xpath.XString(p <= 0 ? "" : s.substring(0, p));
+    },
+
+    "substring-after": (
+        c: xpath.XPathContext,
+        arg1: xpath.XString,
+        arg2: xpath.XString,
+        collation?: xpath.XString,
+    ) => {
+        if (collation) {
+            // TODO?
+            throw new Error("substring-before has an unimplemented overload using collation");
+        }
+        const t = arg2.evaluate(c).stringValue();
+        const l = t.length;
+        if (l === 0) {
+            return arg1;
+        }
+        const s = arg1.evaluate(c).stringValue();
+        const p = s.indexOf(t);
+        return new xpath.XString(p <= 0 ? "" : s.substring(0, p + t.length));
+    },
+
+    // String functions that use regular expressions
+
+    "matches": (
+        c: xpath.XPathContext,
+        input: xpath.XString,
+        pattern: xpath.XString,
+        flags?: xpath.XString,
+    ) => {
+        const s = input.evaluate(c).stringValue();
+        const t = pattern.evaluate(c).stringValue();
+        const f = flags ? flags.evaluate(c).stringValue() : undefined;
+        const r = new RegExp(t, f);
+        return toBool(r.test(s));
+    },
+
+    "replace": (
+        c: xpath.XPathContext,
+        input: xpath.XString,
+        pattern: xpath.XString,
+        replacement: xpath.XString,
+        flags?: xpath.XString,
+    ) => {
+        const s = input.evaluate(c).stringValue();
+        const t = pattern.evaluate(c).stringValue();
+        const x = replacement.evaluate(c).stringValue();
+        const f = flags ? flags.evaluate(c).stringValue() : undefined;
+        const r = new RegExp(t, f);
+        return new xpath.XString(s.replace(r, x));
+    },
+
+    "tokenize": (
+        c: xpath.XPathContext,
+        input: xpath.XString,
+        pattern?: xpath.XString,
+        flags?: xpath.XString,
+    ) => {
+        const s = input.evaluate(c).stringValue();
+        let ps: string[] = [];
+        if (!pattern) {
+            ps = s.trim().split(/\s+/);
+        } else {
+            const t = pattern.evaluate(c).stringValue();
+            const f = flags ? flags.evaluate(c).stringValue() : undefined;
+            const r = new RegExp(t, f);
+            ps = s.split(r);
+        }
+        return new xpath.XSequence(ps.map((x) => new xpath.XString(x)));
+    },
+
+    // TODO: analyze-string - https://www.w3.org/TR/xpath-functions/#func-analyze-string
+
+    // Functions that manipulate URIs
+
+    "resolve-uri": (
+        c: xpath.XPathContext,
+        relative: xpath.XString,
+        base?: xpath.XString,
+    ) => {
+        const s = relative.evaluate(c).stringValue().replace(/(^|\/)(?:\.\/)+/g, "$1");
+        if (/^[a-zA-Z0-9-]+:(?:\/\/)/.test(s)) {
+            return relative;
+        }
+        let b: string;
+        if (!base) {
+            const n = c.contextNode;
+            if (n && n.baseURI) {
+                b = n.baseURI;
+            }
+            return relative;
+        } else {
+            b = base.evaluate(c).stringValue();
+        }
+        const f = s.charAt(0);
+        if (f === "/") {
+            b = b.replace(/^([a-zA-Z0-9-]+:(?:\/\/)?[^\/]*).*$/, "$1") + s;
+        } else {
+            b = b.replace(/#.*$/, "");
+            if (f === "#") {
+                b += s;
+            } else {
+                b = b.replace(/\?.*$/, "");
+                if (f === "?") {
+                    b += s;
+                } else {
+                    b = b.replace(/\/[^\/]+$/, "/") + s;
+                    let o;
+                    do {
+                        o = b;
+                        b = o.replace("/../", "/");
+                    } while (b !== o);
+                }
+            }
+        }
+        return new xpath.XString(b);
+    },
+
+    "encode-for-uri": (
+        c: xpath.XPathContext,
+        uriPart: xpath.XString,
+    ) => {
+        return new xpath.XString(encodeURIComponent(uriPart.evaluate(c).stringValue()));
+    },
+
+    "iri-to-uri": (
+        c: xpath.XPathContext,
+        uriPart: xpath.XString,
+    ) => {
+        return new xpath.XString(encodeURI(uriPart.evaluate(c).stringValue()));
+    },
+
+    "escape-html-uri": (
+        c: xpath.XPathContext,
+        uriPart: xpath.XString,
+    ) => {
+        return new xpath.XString(encodeURI(uriPart.evaluate(c).stringValue()));
+    },
+
+    // Functions and operators on Boolean values
+
+    "true": (
+        c: xpath.XPathContext,
+    ) => {
+        return TRUE;
+    },
+
+    "false": (
+        c: xpath.XPathContext,
+    ) => {
+        return FALSE;
+    },
+
+    "boolean": (
+        c: xpath.XPathContext,
+        arg: xpath.IValueExpression,
+    ) => {
+        return arg.evaluate(c).bool();
+    },
+
+    "not": (
+        c: xpath.XPathContext,
+        arg: xpath.IValueExpression,
+    ) => {
+        return arg.evaluate(c).bool().not();
+    },
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#durations
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#dates-times
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#QName-funcs
+
+    "name": (
+        c: xpath.XPathContext,
+        arg?: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet,
+    ) => {
+        const node = !arg ? c.contextNode
+            : getFirstNode(arg.evaluate(c) as xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet);
+        if (!node) {
+            return new xpath.XString("");
+        }
+
+        return new xpath.XString((node.nodeName || "").replace(/^#.*$/, ""));
+    },
+
+    "local-name": (
+        c: xpath.XPathContext,
+        arg?: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet,
+    ) => {
+        const node = !arg ? c.contextNode
+            : getFirstNode(arg.evaluate(c) as xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet);
+        if (!node) {
+            return new xpath.XString("");
+        }
+
+        return new xpath.XString(((node as Element).localName || ""));
+    },
+
+    "namespace-uri": (
+        c: xpath.XPathContext,
+        arg?: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet,
+    ) => {
+        const node = !arg ? c.contextNode
+            : getFirstNode(arg.evaluate(c) as xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet);
+        if (!node) {
+            return new xpath.XString("");
+        }
+
+        return new xpath.XString(((node as Element).namespaceURI || ""));
+    },
+
+    "lang": (
+        c: xpath.XPathContext,
+        testlang: xpath.XString,
+        arg?: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet,
+    ) => {
+        const node = !arg ? c.contextNode
+            : getFirstNode(arg.evaluate(c) as xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet);
+        if (!node) {
+            return FALSE;
+        }
+
+        const s = testlang.evaluate(c).stringValue();
+
+        let root = node;
+        let r = root.nodeType === 1 && (root as Element)
+            .getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang");
+        while (typeof r !== "string" && root.parentNode) {
+            root = root.parentNode as Element;
+            r = (root as Element)
+                .getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang");
+        }
+        return toBool(typeof r === "string" && (r === s || r.substring(0, s.length + 1) === s + "-"));
+    },
+
+    "root": (
+        c: xpath.XPathContext,
+        arg?: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet,
+    ) => {
+        const node = !arg ? c.contextNode
+            : getFirstNode(arg.evaluate(c) as xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet);
+        if (!node) {
+            return new xpath.XString("");
+        }
+
+        let root = node;
+        while (root.parentNode) {
+            root = root.parentNode;
+        }
+        const s = new xpath.XNodeSet();
+        s.add(root);
+
+        return s;
+    },
+
+    "path": (
+        c: xpath.XPathContext,
+        arg?: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet,
+    ) => {
+        const node = !arg ? c.contextNode
+            : getFirstNode(arg.evaluate(c) as xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet);
+        if (!node) {
+            return new xpath.XSequence([]);
+        }
+
+        return new xpath.XString(buildPath(node, ""));
+    },
+
+    "has-children": (
+        c: xpath.XPathContext,
+        arg?: xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet,
+    ) => {
+        const node = !arg ? c.contextNode
+            : getFirstNode(arg.evaluate(c) as xpath.XSequence<xpath.XNodeSet> | xpath.XNodeSet);
+        if (!node) {
+            return new xpath.XSequence([]);
+        }
+
+        return toBool(node.hasChildNodes());
+    },
+
+    // TODO: innermost - https://www.w3.org/TR/xpath-functions/#func-innermost
+    // TODO: outermost - https://www.w3.org/TR/xpath-functions/#func-outermost
+
+    // General functions and operators on sequences
+
+    /** Returns true if the argument is the empty sequence. */
+    "empty": (
+        c: xpath.XPathContext,
+        arg: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        if (arg instanceof xpath.XSequence) {
+            return toBool(arg.size === 0);
+        }
+        if (arg instanceof xpath.XNodeSet) {
+            return toBool(arg.size === 0);
+        }
+        throw new TypeError("fn:empty expected a sequence");
+    },
+
+    /** Returns true if the argument is a non-empty sequence. */
+    "exists": (
+        c: xpath.XPathContext,
+        arg: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        if (arg instanceof xpath.XSequence) {
+            return toBool(arg.size !== 0);
+        }
+        if (arg instanceof xpath.XNodeSet) {
+            return toBool(arg.size !== 0);
+        }
+        throw new TypeError("fn:empty expected a sequence");
+    },
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#func-head ...
+
+};
+
+const stdFnOp = {
+    // TODO: https://www.w3.org/TR/xpath-functions/#op.numeric
+    // TODO: https://www.w3.org/TR/xpath-functions/#comp.numeric
+    // TODO: https://www.w3.org/TR/xpath-functions/#op.boolean
+    // TODO: https://www.w3.org/TR/xpath-functions/#func-QName-equal
+    // TODO: https://www.w3.org/TR/xpath-functions/#binary-functions
+    // TODO: https://www.w3.org/TR/xpath-functions/#NOTATION-functions
+};
+
+const stdFnMath = {
+    // TODO: https://www.w3.org/TR/xpath-functions/#trigonometry
 };
 
 const stdAddStandardFunctions = xpath.FunctionResolver.prototype.addStandardFunctions;
