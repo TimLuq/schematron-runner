@@ -6,8 +6,9 @@ export {
 } from "./parse-schematron";
 
 export {
-    clearCache, validate, validate as default,
-    IValidationResult,
+    clearCache, validate, validate as default, validateFocused,
+    polymorphicDefaults, throwDefaults, webDefaults,
+    CheckOptionsHandler, IValidationResult,
 } from "./validator";
 
 export { IValidateOptions } from "./common";

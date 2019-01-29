@@ -11,7 +11,7 @@ import xpath, { createOptionsEvaluator } from "./xpath-helper";
 
 import { IValidateOptions } from "./common";
 
-import sha1 from "./sha1";
+import { polymorphicSHA1, webSHA1 } from "./sha1";
 
 let dom: Promise<{ new(): DOMParser }>;
 
@@ -190,16 +190,19 @@ const defaultOptionsBase = Object.freeze({
 
 type SchematronDefaultOptions = Readonly<Partial<IValidateOptions> & typeof defaultOptionsBase>;
 
-const defaultOptionsPartial: SchematronDefaultOptions = defaultOptionsBase;
-
 function tc(o: any) { return typeof o; }
 
 function checkOptions(options: Partial<IValidateOptions>, handler: CheckOptionsHandler): IValidateOptions {
     const f = <T extends keyof IValidateOptions>(k: T) => handler<T>(k, typeof options[k], options[k]);
     if (typeof options.DOMParser !== "function" &&
-            !(typeof options.DOMParser === "object" &&
+            !(typeof options.DOMParser === "object" && options.DOMParser &&
                 typeof (options.DOMParser as any).then === "function")) {
         options.DOMParser = f("DOMParser");
+    }
+    if (typeof options.hashFunction !== "function" &&
+            !(typeof options.hashFunction === "object" && options.hashFunction &&
+                typeof (options.hashFunction as any).then === "function")) {
+        options.hashFunction = f("hashFunction");
     }
     if (typeof options.loadXMLFile !== "function") {
         options.loadXMLFile = f("loadXMLFile");
@@ -234,6 +237,9 @@ export function polymorphicDefaults<T extends keyof IValidateOptions>(field: T, 
         }
         return dom;
     }
+    if (field === "hashFunction") {
+        return polymorphicSHA1();
+    }
     if (field === "loadXMLFile") {
         return loadXmlFilePoly;
     }
@@ -248,14 +254,10 @@ export function webDefaults<T extends keyof IValidateOptions>(field: T, type: Re
         return (defaultOptionsBase as any)[field];
     }
     if (field === "DOMParser") {
-        if (!dom) {
-            if (typeof DOMParser === "undefined") {
-                dom = import("xmldom").then((x) => x.DOMParser);
-            } else {
-                dom = Promise.resolve(DOMParser);
-            }
-        }
-        return dom;
+        return DOMParser;
+    }
+    if (field === "hashFunction") {
+        return webSHA1();
     }
     if (field === "loadXMLFile") {
         return function loadXMLFile() {
@@ -340,7 +342,7 @@ export async function validateFocused(
             throw ne;
         }
     } else {
-        const hash = await sha1(schematron);
+        const hash = await (await opts.hashFunction)(schematron);
         parsedSchematron = parsedMap.get(hash) || (() => {
             // Load schematron doc
             // tslint:disable-next-line:max-line-length

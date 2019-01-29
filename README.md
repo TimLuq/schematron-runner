@@ -7,12 +7,33 @@
 
 A javascript implementation of schematron testing for XML documents. This specifically resolves a need for a package that allows a quick, reliable install for validating HL7 clinical documents, such as C-CDA.
 
-### Install
-```
-npm install schematron-runner
+Due to `schematron-runner` being written in TypeScript. This grants typing and typechecking possibilities if this project is used as a libary.
+
+## Install
+
+For the CLI application to be available system wide you may wish to install globally.
+If you wish to use it for a project a module installation is recommended.
+
+Using `npm`:
+```shell
+npm install schematron-runner # project
+npm install -g schematron-runner # global
 ```
 
-### Validating xml
+Using `yarn`:
+```shell
+yarn add schematron-runner # global
+yarn global add schematron-runner #project
+```
+
+Building from source:
+```shell
+git clone git+https://github.com/TimLuq/schematron-runner.git
+cd schematron-runner
+npm install && npm run build
+```
+
+## Validating xml
 ```javascript
 import validator from "schematron-runner";
 import { promises as fs } from "fs";
@@ -40,9 +61,10 @@ const results = await validator.validate(xmlPath, schematronPath);
 ```
 
 ### Results
-`results` is an object containing arrays  `errors`, `warnings`, and `ignoreds`.
+`results` is an object containing arrays `errors`, `warnings`, `passed` and `ignored`.
 
-**Errors**, **warnings**, and **passed** are reported as determined by the schematron and test descriptions. They are of the following form:
+`errors`, `warnings`, and `passed` are reported as determined by the schematron and test descriptions.
+They are instances of the following form:
 ```javascript
 {
     type: type,                     // "error" or "warning"
@@ -75,7 +97,7 @@ const results = await validator.validate(xmlPath, schematronPath);
 ```
 
 ### Options
-The `validate` function takes in an `options` object as an optional third argument. The three fields that can be included in `options` are as follows:
+The `validate` function takes in an `options` object as an optional third argument. The fields that can be included in `options` are as follows:
 
 * **`includeWarnings`**: `true` or `false`, this determines whether or not warnings should be tested and returned. Defaults to `true`.
 

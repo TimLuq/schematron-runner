@@ -31,6 +31,8 @@ const options: Partial<IValidateOptions> = {
 const schRepo = "https://raw.githubusercontent.com/OpenPEPPOL/peppol-bis-invoice-3/master";
 
 async function bisValidation(t: ExecutionContext<ITestContext>, href: string, expected: IExpectedState) {
+    const startTime = Date.now();
+    try {
 
     const cc = await validate(href, schRepo + "/rules/sch/CEN-EN16931-CII.sch", options);
     t.is(cc.errors.length, expected.cc.errors,
@@ -72,6 +74,9 @@ async function bisValidation(t: ExecutionContext<ITestContext>, href: string, ex
     t.is(pu.passed.length, expected.pu.passed,
         `Expected number of passed for PEPPOL-EN16931-UBL to be ${expected.pu.passed}`);
 
+    } finally {
+        t.log(t.title + " time: " + ((startTime - Date.now()) / 1000) + "s");
+    }
 }
 
 // tslint:disable-next-line:no-namespace

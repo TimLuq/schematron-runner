@@ -24,6 +24,12 @@ export interface IValidateOptions {
     DOMParser: PromiseLike<{ new(): DOMParser; }> | { new(): DOMParser; };
 
     /**
+     * A hash function used for creating keys for caching of resources.
+     */
+    hashFunction: PromiseLike<(data: ArrayBuffer | Uint8Array | string) => PromiseLike<string>>
+        | ((data: ArrayBuffer | Uint8Array | string) => PromiseLike<string>);
+
+    /**
      * Function used to load a document from the filesystem.
      *
      * @param {object} options an inherited reference to a complete `IValidateOptions` object

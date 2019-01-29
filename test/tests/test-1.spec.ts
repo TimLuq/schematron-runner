@@ -103,4 +103,10 @@ test("structure of validator result using both filepaths", async (t) => {
     t.is(results.ignored.length, 1, "return correct number of ignored");
     t.is(results.passed.length, 25, "return correct number of passed assertions");
     t.is(results.warnings.length, 15, "return correct number of warnings");
+
+    if (results.ignored && results.ignored.length) {
+        for (const ign of results.ignored) {
+            t.log("Ignored:", ign.errorMessage);
+        }
+    }
 });

@@ -8,7 +8,7 @@ interface ITextEncoderCons {
 
 declare var TextEncoder: ITextEncoderCons;
 let stringToUint8: (data: string) => Uint8Array;
-let sha1hex: PromiseLike<(data: ArrayBuffer | Uint8Array) => PromiseLike<string>>;
+let sha1hex: PromiseLike<(data: ArrayBuffer | Uint8Array | string) => PromiseLike<string>>;
 
 if (typeof TextEncoder !== "undefined") {
     stringToUint8 = (data: string) => new TextEncoder("utf-8").encode(data);
@@ -20,45 +20,59 @@ if (typeof TextEncoder !== "undefined") {
     };
 }
 
-if (typeof crypto !== "undefined" && crypto.subtle) {
-    const hex = (data: ArrayBuffer) =>
-        Array.from(new Uint8Array(data)).map((b) => ("00" + b.toString(16)).slice(-2)).join("");
-    sha1hex = Promise.resolve((data: ArrayBuffer | Uint8Array) => {
-        const hexstr: PromiseLike<string> = crypto.subtle.digest("SHA-1", data).then(hex);
-        return hexstr;
-    });
-} else {
-    let toBuffer: (data: ArrayBuffer | Uint8Array) => Buffer;
-
-    if (typeof Buffer === "undefined") {
-        toBuffer = (data: ArrayBuffer | Uint8Array) => {
-            const arr =  data instanceof ArrayBuffer ? new Uint8Array(data) : data;
-            return arr as Buffer;
-        };
+/**
+ * A hash function which tries to use `crypto.subtle` but falls back upon importing `crypto` library.
+ * @returns {Promise<Function>} an async function accepting an `ArrayBuffer` or `Uint8Array` as the only parameter
+ */
+export function polymorphicSHA1(): PromiseLike<(data: ArrayBuffer | Uint8Array | string) => PromiseLike<string>> {
+    if (sha1hex) {
+        return sha1hex;
+    }
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+        return sha1hex = webSHA1();
     } else {
-        toBuffer = (data: ArrayBuffer | Uint8Array) => {
-            if (data instanceof Buffer) {
-                return data as Buffer;
-            }
-            if (data instanceof ArrayBuffer) {
-                return Buffer.from(data);
-            }
-            return Buffer.from(data.buffer as ArrayBuffer, data.byteOffset, data.byteLength);
-        };
+        let toBuffer: (data: ArrayBuffer | Uint8Array) => Buffer;
+
+        if (typeof Buffer === "undefined") {
+            toBuffer = (data: ArrayBuffer | Uint8Array) => {
+                const arr =  data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+                return arr as Buffer;
+            };
+        } else {
+            toBuffer = (data: ArrayBuffer | Uint8Array) => {
+                if (data instanceof Buffer) {
+                    return data as Buffer;
+                }
+                if (data instanceof ArrayBuffer) {
+                    return Buffer.from(data);
+                }
+                return Buffer.from(data.buffer as ArrayBuffer, data.byteOffset, data.byteLength);
+            };
+        }
+
+        return sha1hex = import("crypto").then((crpt) => (data: ArrayBuffer | Uint8Array | string) => {
+            const d = typeof data === "string" ? stringToUint8(data) : data;
+            const hexstr = Promise.resolve(crpt.createHash("sha1").update(toBuffer(d)).digest("hex"));
+            return hexstr;
+        });
     }
 
-    sha1hex = import("crypto").then((crpt) => (data: ArrayBuffer | Uint8Array) => {
-        const hexstr = Promise.resolve(crpt.createHash("sha1").update(toBuffer(data)).digest("hex"));
-        return hexstr;
-    });
 }
 
 /**
- * Hashes data to a SHA1 hex string.
- *
- * @param data data to hash
+ * Returns a hash function suitable for modern browsers by using `crypto.subtle`.
+ * @returns {Promise<Function>} an async function accepting an `ArrayBuffer` or `Uint8Array` as the only parameter
  */
-export default function sha1(data: ArrayBuffer | Uint8Array | string) {
-    const d = typeof data === "string" ? stringToUint8(data) : data;
-    return sha1hex.then((f) => f(d));
+export function webSHA1(): PromiseLike<(data: ArrayBuffer | Uint8Array | string) => PromiseLike<string>> {
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+        const hex = (data: ArrayBuffer) =>
+            Array.from(new Uint8Array(data)).map((b) => ("0" + b.toString(16)).slice(-2)).join("");
+        return Promise.resolve((data: ArrayBuffer | Uint8Array | string) => {
+            const d = typeof data === "string" ? stringToUint8(data) : data;
+            const hexstr: PromiseLike<string> = crypto.subtle.digest("SHA-1", d).then(hex);
+            return hexstr;
+        });
+    } else {
+        throw new Error("crypto.subtle is not globally defined.");
+    }
 }
