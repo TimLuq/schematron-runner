@@ -48,7 +48,7 @@ test("ccda xdr test 1", async (t) => {
     }
     t.is(results.ignored.length, 0, "return correct number of ignored");
     t.is(results.passed.length, 68, "return correct number of passed assertions");
-    t.is(results.warnings.length, 15, "return correct number of warnings");
+    t.is(results.warnings.length, 0, "return correct number of warnings");
 });
 
 test("ccda xdr test 2", async (t) => {
@@ -63,6 +63,6 @@ test("ccda xdr test 2", async (t) => {
 
     t.is(results.errors.length, 7, "return correct number of errors");
     t.is(results.ignored.length, 0, "return correct number of ignored");
-    t.is(results.passed.length, 25, "return correct number of passed assertions");
-    t.is(results.warnings.length, 15, "return correct number of warnings");
+    t.is(results.passed.length, 767, "return correct number of passed assertions");
+    t.is(results.warnings.length, 53, "return correct number of warnings");
 });

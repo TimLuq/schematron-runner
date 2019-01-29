@@ -7,7 +7,7 @@ import {
     replaceTestWithExternalDocument, schematronIncludes,
 } from "./include-external-document";
 
-import xpath from "./xpath-helper";
+import xpath, { createOptionsEvaluator } from "./xpath-helper";
 
 import { IValidateOptions } from "./common";
 
@@ -392,38 +392,7 @@ export async function validateFocused(
         }
     })();
 
-    const sel = (expression: string, node: Node, single?: boolean) => {
-        const ev = xpath.parse(expression);
-        const value = ev.evaluate({ ...evaluatorOptions, node });
-
-        if (value === null) {
-            return undefined as any as string;
-        }
-        switch (typeof value) {
-            case "string": return value;
-            case "boolean": return value;
-            case "number": return value;
-            case "undefined": return undefined as any as string;
-        }
-
-        if (value instanceof xpath.XString) {
-            return value.stringValue();
-        }
-        if (value instanceof xpath.XBoolean) {
-            return value.booleanValue();
-        }
-        if (value instanceof xpath.XNumber) {
-            return value.numberValue();
-        }
-        if (value instanceof xpath.XNodeSet) {
-            const res = value.toArray();
-            if (single) {
-                return res[0];
-            }
-            return res;
-        }
-        throw new TypeError("Unexpected result");
-    };
+    const sel = createOptionsEvaluator(evaluatorOptions);
 
     const state: IContextState = {
         ...opts,

@@ -1374,8 +1374,8 @@ xpath.FunctionResolver.prototype.addStandardFunctions =
             ths.functions["{http://www.w3.org/2001/XMLSchema}" + ln] = f;
         }
 
-        for (const ln of Object.keys(stdFuncsFn) as Array<keyof typeof stdFuncsXs>) {
-            const f = stdFuncsXs[ln] as xpath.XPathFunction;
+        for (const ln of Object.keys(stdFuncsFn) as Array<keyof typeof stdFuncsFn>) {
+            const f = stdFuncsFn[ln] as xpath.XPathFunction;
             ths.functions["{}" + ln] = f;
             ths.functions["{http://www.w3.org/2005/xpath-functions}" + ln] = f;
         }
@@ -1390,5 +1390,69 @@ xpath.NamespaceResolver.prototype.getNamespace =
         }
         return r;
     };
+
+export function createOptionsEvaluator(evaluatorOptions: xpath.IXPathEvaluatorOptions) {
+    return (expression: string, node: Node, single?: boolean) => {
+
+        let ev;
+        try {
+            ev = xpath.parse(expression);
+        } catch (e) {
+            const err = new Error("Failed to parse expression: " + JSON.stringify(expression));
+            (err as any).innerError = e;
+            throw err;
+        }
+        const value = ev.evaluate({ ...evaluatorOptions, node });
+
+        if (value === null) {
+            return undefined as any as string;
+        }
+        switch (typeof value) {
+            case "string": return value;
+            case "boolean": return value;
+            case "number": return value;
+            case "undefined": return undefined as any as string;
+        }
+
+        if (value instanceof xpath.XString) {
+            return value.stringValue();
+        }
+        if (value instanceof xpath.XBoolean) {
+            return value.booleanValue();
+        }
+        if (value instanceof xpath.XNumber) {
+            return value.numberValue();
+        }
+        if (value instanceof xpath.XNodeSet) {
+            const res = value.toArray();
+            if (single) {
+                return res[0];
+            }
+            return res;
+        }
+        if (value instanceof xpath.XSequence) {
+            const res = [];
+            for (const x of value.items) {
+                if (x instanceof xpath.XNodeSet) {
+                    res.push(...x.toArray());
+                } else if (x instanceof xpath.XBoolean) {
+                    res.push(x.booleanValue());
+                } else if ((x instanceof xpath.XDecimal) || (x instanceof xpath.XDouble) ||
+                    (x instanceof xpath.XFloat) || (x instanceof xpath.XNumber)) {
+                    res.push(x.numberValue());
+                } else if (x instanceof xpath.XString) {
+                    res.push(x.stringValue());
+                } else {
+                    res.push(x);
+                }
+            }
+            if (single) {
+                return res[0];
+            }
+            return res;
+        }
+        throw new TypeError("Unexpected result");
+    };
+}
 
 export default xpath;

@@ -1,4 +1,4 @@
-import xpath from "./xpath-helper";
+import xpath, { createOptionsEvaluator } from "./xpath-helper";
 
 function* getNamedChildren(parent: Element, localName: string, ns?: string): IterableIterator<Element> {
     const children = parent.childNodes;
@@ -74,6 +74,20 @@ function getVal<O extends object>(o: O, ...args: Array<string | number | symbol>
     return v;
 }
 
+let gEvalOpts: xpath.IXPathEvaluatorOptions | undefined;
+
+function getEvalOptions() {
+    if (gEvalOpts) {
+        return gEvalOpts;
+    }
+    const func = new xpath.FunctionResolver();
+    func.addStandardFunctions();
+    gEvalOpts = {
+        functions: func,
+    };
+    return gEvalOpts;
+}
+
 export default function parseSchematron(doc: Document) {
     const namespaceMap = new Map<string, string>();
     const abstractPatterns = new Set<string>();
@@ -83,8 +97,10 @@ export default function parseSchematron(doc: Document) {
     const ruleMap = new Map<string, IRule>();
     const functions = new Map<string, IFunction>();
 
+    const sel = createOptionsEvaluator(getEvalOptions());
+
     //// Namespace mapping
-    const namespaces = xpath.select('//*[local-name()="ns"]', doc) as Element[];
+    const namespaces = sel('//*[local-name()="ns"]', doc) as Element[];
     for (const namespace of namespaces) {
         const pf = namespace.getAttribute("prefix");
         const ns = namespace.getAttribute("uri");
@@ -94,9 +110,9 @@ export default function parseSchematron(doc: Document) {
     }
 
     //// Function definitions
-    const functionList = xpath.select('//*[local-name()="function"]', doc) as Element[];
+    const functionList = sel('//*[local-name()="function"]', doc) as Element[];
     for (const func of functionList) {
-        const select = xpath.select('//*[local-name()="value-of"]/@select', func) as Attr[];
+        const select = sel('//*[local-name()="value-of"]/@select', func) as Attr[];
         const f: IFunction = {
             name: func.getAttribute("name") as string,
             params: (xpath.select('//*[local-name()="param"]', func) as Element[]).map((e) => {
@@ -122,7 +138,7 @@ export default function parseSchematron(doc: Document) {
     //// Pattern to level mapping
 
     // Find errors phases
-    const errorPhase = xpath.select('//*[local-name()="phase" and @id="errors"]', doc) as Element[];
+    const errorPhase = sel('//*[local-name()="phase" and @id="errors"]', doc) as Element[];
 
     // Store error patterns
     if (errorPhase.length) {
@@ -135,7 +151,7 @@ export default function parseSchematron(doc: Document) {
     }
 
     // Find errors phases
-    const warningPhase = xpath.select('//*[local-name()="phase" and @id="warnings"]', doc) as Element[];
+    const warningPhase = sel('//*[local-name()="phase" and @id="warnings"]', doc) as Element[];
 
     // Store warning patterns
     if (warningPhase.length) {
@@ -150,7 +166,7 @@ export default function parseSchematron(doc: Document) {
     //// Pattern to rule and rule to assertion mapping
 
     // Find patterns
-    const patterns = xpath.select('//*[local-name()="pattern"]', doc) as Element[];
+    const patterns = sel('//*[local-name()="pattern"]', doc) as Element[];
 
     // Map patterns to rules
     for (const pattern of patterns) {
@@ -163,7 +179,7 @@ export default function parseSchematron(doc: Document) {
             }
             const isA = pattern.getAttribute("is-a");
             if (isA) {
-                const params = (xpath.select('./*[local-name()="param"]', pattern) as Element[]).reduce((m, e) => {
+                const params = (sel('./*[local-name()="param"]', pattern) as Element[]).reduce((m, e) => {
                     const n = e.getAttribute("name");
                     if (n) {
                         m.set(n, e.getAttribute("value") || "");
@@ -175,7 +191,7 @@ export default function parseSchematron(doc: Document) {
             }
             patternRuleMap.set(patternId, parsedRules);
         }
-        const rules = xpath.select('./*[local-name()="rule"]', pattern) as Element[];
+        const rules = sel('./*[local-name()="rule"]', pattern) as Element[];
         for (const rule of rules) {
             const ruleId = rule.getAttribute("id") || undefined;
             const obj = {
