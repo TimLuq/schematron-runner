@@ -6,6 +6,8 @@ const schs: string[] = [];
 let state: undefined | boolean;
 
 const processing = {
+    resourceDir: undefined as undefined | string,
+
     ignoredAsErrors: false,
     warningsAsErrors: false,
 
@@ -14,8 +16,10 @@ const processing = {
     showWarnings: true,
 };
 
-function runValidation<T extends string = string>(sch: string, xml: T): Promise<[T, ICompletedValidation]> {
-    return validateFocused(xml, sch, polymorphicDefaults).then<[T, ICompletedValidation]>((x) => [xml, x]);
+function runValidation<T extends string = string>(sch: string, xml: T, r?: string): Promise<[T, ICompletedValidation]> {
+    return validateFocused(xml, sch, polymorphicDefaults, {
+        resourceDir: r,
+    }).then<[T, ICompletedValidation]>((x) => [xml, x]);
 }
 
 function main(argv: string[]): Promise<boolean> {
@@ -46,6 +50,9 @@ function main(argv: string[]): Promise<boolean> {
             } else if (arg === "--hide-warnings") {
                 processing.showWarnings = false;
                 continue;
+            } else if (arg.substring(0, 6) === "--res=") {
+                processing.resourceDir = arg.substring(6);
+                continue;
             } else if (arg === "--help") {
                 const options = {
                     "--ignored-as-errors": "Generate an exit code failiure if any ignored rule are encountered.",
@@ -59,6 +66,8 @@ function main(argv: string[]): Promise<boolean> {
 
                     "--hide-warnings": "Hide all warnings from rules.",
                     "--show-warnings": "Show all warnings from rules.",
+
+                    "--res=PATH": "A path where some resources may be located.",
 
                     "--sch": "The rest of the arguments (or until `--xml` is found) are counted as schematron files.",
                     "--xml": "The rest of the arguments (or until `--sch` is found) are counted as xml files.",
@@ -74,7 +83,7 @@ Many files may be specified. If neither \`--xml\` or \`--sch\` has been encounte
 
 ## OPTIONS
 ${(Object.keys(options) as Array<keyof typeof options>).map((option) =>
-    `- ${option}${"                    ".substring(option.length)}${options[option]}`)
+    `${option}${"                    ".substring(option.length)}${options[option]}`)
     .join("\n")}
 `.trim());
                 return Promise.resolve(true);
@@ -94,7 +103,7 @@ ${(Object.keys(options) as Array<keyof typeof options>).map((option) =>
                     curr = false;
                 }
             }
-            if (state) {
+            if (curr) {
                 schs.push(arg);
             } else {
                 xmls.push(arg);
@@ -105,7 +114,7 @@ ${(Object.keys(options) as Array<keyof typeof options>).map((option) =>
     const res: Array<Promise<boolean>> = [];
 
     for (const sch of schs) {
-        res.push(Promise.all(xmls.map((xml) => runValidation(sch, xml)))
+        res.push(Promise.all(xmls.map((xml) => runValidation(sch, xml, processing.resourceDir)))
             .then((results) => {
                 return results.reduce((s, [xml, r]) => {
                     const ret = r.errors.length !== 0 ||
