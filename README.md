@@ -30,12 +30,12 @@ Building from source:
 ```shell
 git clone git+https://github.com/TimLuq/schematron-runner.git
 cd schematron-runner
-npm install && npm run build
+npm install
 ```
 
-## Validating xml
+### Validating xml
 ```javascript
-import validator from "schematron-runner";
+import { validate, validateFocused, webDefaults } from "schematron-runner";
 import { promises as fs } from "fs";
 
 const xmlPath = 'someFile.xml';
@@ -45,25 +45,69 @@ const schematronPath = 'someFile.sch';
     const xml = await fs.readFile(xmlPath, "utf8");
     const schematron = await fs.readFile(schematronPath, "utf8");
 
-    const results = await validator.validate(xml, schematron);
+    const results = await validate(xml, schematron);
     // do stuff with results
 })();
 ```
 File paths can also be passed to the validator directly. The following lines all return the same results:
 ```javascript
-const results = await validator.validate(xml, schematronPath);
+const results = await validate(xml, schematronPath);
 ```
 ```javascript
-const results = await validator.validate(xmlPath, schematron);
+const results = await validate(xmlPath, schematron);
 ```
 ```javascript
-const results = await validator.validate(xmlPath, schematronPath);
+const results = await validate(xmlPath, schematronPath);
 ```
 
-### Results
-`results` is an object containing arrays `errors`, `warnings`, `passed` and `ignored`.
+### Prebuilt files
 
-`errors`, `warnings`, and `passed` are reported as determined by the schematron and test descriptions.
+The published packages includes a number of files in the `build` directory. I recommend you to use a bundler, such as `rollup` or `webpack`, if your project is an end product. But these files are provided for other uses.
+
+- `build/bin.js`
+    This file is the CLI program. When installing the package using `yarn` or `npm` this is registerad as te application `schematron-runner`.
+- `build/schematron-browser.js`
+    This file is a prebuilt UMD version for web use. It removes the polymorphic options and only exposes web compatible versions of all exposed APIs.
+- `build/schematron-runner.js`
+    This file is a CommonJS module optimized for Node 8+.
+- `build/schematron-runner.mjs`
+    This file is a ES6 module additionally featuring dynamic imports. This may be used by bundlers, Node's ES module loader or modern browsers using `<script type="module" src="schematron-runner.mjs"></script>`.
+
+### API
+
+The following APIs are available.
+
+#### Interface: Options
+
+- `options.excludeWarnings` [&lt;boolean&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#Boolean_type) Determines whether or not warnings should be tested and returned. If this is set to `true` the `result.warnings` array will be empty and the assertions that are detected as warnings will not be included in `result.passed`. *Defaults to `false`.*
+- `options.resourceDir` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The path to a directory containing resource files (eg. `voc.xml`) which may be necessary for some schematron tests. *Defaults to `'./'`, the current directory.*
+- `options.xmlSnippetMaxLength` [&lt;number&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#Number_type) An integer which is the maximum length of the `xml` field in validation results. Set to `0` for unlimited length. *Defaults to `200`.*
+- `options.DOMParser` [&lt;Promise&lt;class DOMParser&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) | [&lt;class DOMParser&gt;](https://developer.mozilla.org/en-US/docs/Web/API/DOMParser) Class to use to parse XML documents. *Defaults to global `DOMParser` or one provided by the `xmldom` package.*
+- `options.hashFunction` [&lt;Promise&lt;(string) => Promise&lt;string&gt;&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) | [&lt;(string) => Promise&lt;string&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function) Function used to hash content to a key representing the data. Used for creating caching keys. *Defaults to an SHA1 implementation using `crypto.subtle` or the `crypto` package.*
+- `options.loadXMLFile` [&lt;(options, string) => Promise&lt;Document&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function) Function used to load file paths. Will throw when using the `webDefaults`. *Using `polymorphicDefaults` the default is to use the `fs` package.*
+- `options.loadXMLUrl` [&lt;(options, string) => Promise&lt;Document&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function) Function used to load URL documents. *Defaults to using global `fetch` and `polymorphicDefaults` falls back upon the `node-fetch` package.*
+
+
+The [`validate`](#validate-xml-schematron-options) and [`validateFocused`](#validatefocused-xml-schematron-defaults-options) functions takes an `options` object as an optional argument. These options may be used to change the behavior of the validation.
+
+Below is an example with warnings disabled and using web compatible defaults:
+
+```javascript
+const results = await validateFocused(xml, schematron, webDefaults(), {
+    excludeWarnings: true
+});
+```
+
+#### Interface: Results
+
+- `results.errors` [&lt;Object[]&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) An array of error objects.
+- `results.ignored` [&lt;Object[]&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) An array of ingored objects.
+- `results.passed` [&lt;Object[]&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) An array of passed objects.
+- `results.warnings` [&lt;Object[]&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) An array of warning objects.
+
+The `results` object contains arrays `errors`, `warnings`, `passed` and `ignored`.
+
+The `errors`, `passed`, and `warnings` arrays are reported as determined by the schematron and test descriptions.
 They are instances of the following form:
 ```javascript
 {
@@ -81,7 +125,7 @@ They are instances of the following form:
 }
 ```
 
-**Ignored** tests are those that resulted in an exception while running (eg. the test is invalid xpath and could not be parsed properly) and require manual inspection. They are of the following form:
+The `ignored` tests are those that resulted in an exception while running (eg. the test is invalid xpath and could not be parsed properly) and require manual inspection. They are of the following form:
 ```javascript
 {
     errorMessage: errorMessage,     // reason for the exception/ignoring the test
@@ -96,31 +140,64 @@ They are instances of the following form:
 }
 ```
 
-### Options
-The `validate` function takes in an `options` object as an optional third argument. The fields that can be included in `options` are as follows:
+#### clearCache ()
 
-* **`includeWarnings`**: `true` or `false`, this determines whether or not warnings should be tested and returned. Defaults to `true`.
+The validator uses a cache to store parsed schematrons, an intermediate data structure used to store revelant schematron information. This reduces the runtime of the validator when validating against the same schematron multiple times.
 
-* **`resourceDir`**: the path to a directory containing resource files (eg. voc.xml) which may be necessary for some schematron tests. Defaults to `'./'`, the current directory.
+#### validate (xml, schematron[, options])
 
-* **`xmlSnippetMaxLength`**: an integer, which is the maximum length of the `xml` field in validation results. Defaults to `200`. Set to `0` for unlimited length.
+- `xml` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing an XML document to be validated.
+- `schematron` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing a Schematron XML document to use for validation.
+- `options` [&lt;Options&gt;](#interface-options) Optional options object overriding default processing.
+- Returns: [&lt;Promise&lt;Results&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
 
-Here is an example with warnings disabled:
+Equivalent of calling `validateFocused(xml, schematron, polymorphicDefaults(), options)`. See [Interface: Results](#interface-results) for description of the results object.
 
-```javascript
-const results = await validator.validate(xml, schematron, { includeWarnings: false });
-```
+#### validateFocused (xml, schematron, defaults[, options])
 
-### Cache
-The validator uses a cache to store parsed schematrons, an intermediate data structure used to store revelant schematron information. This reduces the runtime of the validator when validating against the same schematron multiple times. You can clear the cache at any time with:
-```javascript
-validator.clearCache();
-```
+- `xml` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing an XML document to be validated.
+- `schematron` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing a Schematron XML document to use for validation.
+- `defaults` [&lt;Function&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function) Function used to fill default options where nothing is provided. See [polymorphicDefaults](#polymorphicdefaults-field-type), [throwDefaults](#throwdefaults-field-type), and [webDefaults](#webdefaults-field-types). Custom functions should fallback upon one of the three provided functions.
+- `options` [&lt;Options&gt;](#interface-options) Optional options object overriding default processing.
+- Returns: [&lt;Promise&lt;Results&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
+
+Validates a document against a schematron ruleset.
+See [Interface: Results](#interface-results) for description of the results object.
+
+#### parseSchematron (document)
+
+- `document` [&lt;Document&gt;](https://developer.mozilla.org/en-US/docs/Web/API/Document) Schematron DOM document.
+- Returns: [&lt;Object&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) The parsed information representing the schematron document.
+
+Parse a schematron document to an internal representation. Might be usefull for displaying the discovered parts of a schematron file.
+
+#### polymorphicDefaults (field, type)
+
+- `field` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The name of the option to provide a default value for.
+- `type` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The type of the option provided by the base options object.
+
+The provider will prefer gobal objects as if in a web context. If the global objects are not set it will load external packages to provide the functionality.
+
+For the prebuilt `build/schematron-browser.js` this is an alias for [webDefaults](#webdefaults-fields-type).
+
+#### throwDefaults (field, type)
+
+- `field` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The name of the option to provide a default value for.
+- `type` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The type of the option provided by the base options object.
+
+The provider will throw when called. A full options object must have been used.
+
+#### webDefaults (field, type)
+
+- `field` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The name of the option to provide a default value for.
+- `type` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The type of the option provided by the base options object.
+
+The provider will use gobal objects as if in a web context. If the global objects are not set it will throw or result in an undefined state.
 
 ---
 ## License (MIT)
 
-Copyright &copy; 2017 [Eric Wadkins](http://www.ericwadkins.com/), 2018 [Tim Lundqvist](https://github.com/TimLuq/).
+Copyright &copy; 2017 [Eric Wadkins](http://www.ericwadkins.com/), 2018-2019 [Tim Lundqvist](https://github.com/TimLuq/).
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

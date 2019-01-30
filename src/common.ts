@@ -26,8 +26,8 @@ export interface IValidateOptions {
     /**
      * A hash function used for creating keys for caching of resources.
      */
-    hashFunction: PromiseLike<(data: ArrayBuffer | Uint8Array | string) => PromiseLike<string>>
-        | ((data: ArrayBuffer | Uint8Array | string) => PromiseLike<string>);
+    hashFunction: PromiseLike<(data: string) => PromiseLike<string>>
+        | ((data: string) => PromiseLike<string>);
 
     /**
      * Function used to load a document from the filesystem.

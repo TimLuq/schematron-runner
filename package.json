@@ -8,6 +8,7 @@
   "types": "esm/schematron-runner.d.ts",
   "bin": "build/bin.js",
   "scripts": {
+    "prepare": "npm run tsc && npm run rollup",
     "build": "npm run tsc && npm run rollup",
     "tsc": "tsc -p tsconfig.json",
     "rollup": "rollup -c",
