@@ -9,6 +9,24 @@ A javascript implementation of schematron testing for XML documents. This specif
 
 Due to `schematron-runner` being written in TypeScript. This grants typing and typechecking possibilities if this project is used as a libary.
 
+## Table of Contents
+
+* [Install](#install)
+  * [Prebuilt files](#prebuilt-files)
+* [CLI](#cli)
+* [API](#api)
+  * [Example](#example-validating-xml)
+  * [Interface: Options](#interface-options)
+  * [Interface: Results](#interface-results)
+  * [clearCache()](#clearcache)
+  * [validate(xml, schematron[, options])](#validate-xml-schematron-options)
+  * [validateFocused(xml, schematron, defaults[, options])](#validatefocused-xml-schematron-defaults-options)
+  * [parseSchematron(document)](#parseschematron-document)
+  * [polymorphicDefaults(field, type)](#polymorphicDefaults-field-type)
+  * [throwDefaults(field, type)](#throwdefaults-field-type)
+  * [webDefaults(field, type)](#webDefaults-field-type)
+* [License (MIT)](#license-mit)
+
 ## Install
 
 For the CLI application to be available system wide you may wish to install globally.
@@ -33,7 +51,30 @@ cd schematron-runner
 npm install
 ```
 
-### Validating xml
+### Prebuilt files
+
+The published packages includes a number of files in the `build` directory. I recommend you to use a bundler, such as `rollup` or `webpack`, if your project is an end product. But these files are provided for other uses.
+
+- `build/bin.js`
+    This file is the CLI program. When installing the package using `yarn` or `npm` this is registerad as te application `schematron-runner`.
+- `build/schematron-browser.js`
+    This file is a prebuilt UMD version for web use. It removes the polymorphic options and only exposes web compatible versions of all exposed APIs.
+- `build/schematron-runner.js`
+    This file is a CommonJS module optimized for Node 8+.
+- `build/schematron-runner.mjs`
+    This file is a ES6 module additionally featuring dynamic imports. This may be used by bundlers, Node's ES module loader or modern browsers using `<script type="module" src="schematron-runner.mjs"></script>`.
+
+## CLI
+
+After installation (or by running `npx`) an executable program named `schematron-runner` is available.
+
+For information about CLI usage run `schematron-runner --help`.
+
+## API
+
+The following APIs are available.
+
+### Example: Validating xml
 ```javascript
 import { validate, validateFocused, webDefaults } from "schematron-runner";
 import { promises as fs } from "fs";
@@ -51,33 +92,12 @@ const schematronPath = 'someFile.sch';
 ```
 File paths can also be passed to the validator directly. The following lines all return the same results:
 ```javascript
-const results = await validate(xml, schematronPath);
-```
-```javascript
-const results = await validate(xmlPath, schematron);
-```
-```javascript
-const results = await validate(xmlPath, schematronPath);
+const results0 = await validate(xml, schematronPath);
+const results1 = await validate(xmlPath, schematron);
+const results2 = await validate(xmlPath, schematronPath);
 ```
 
-### Prebuilt files
-
-The published packages includes a number of files in the `build` directory. I recommend you to use a bundler, such as `rollup` or `webpack`, if your project is an end product. But these files are provided for other uses.
-
-- `build/bin.js`
-    This file is the CLI program. When installing the package using `yarn` or `npm` this is registerad as te application `schematron-runner`.
-- `build/schematron-browser.js`
-    This file is a prebuilt UMD version for web use. It removes the polymorphic options and only exposes web compatible versions of all exposed APIs.
-- `build/schematron-runner.js`
-    This file is a CommonJS module optimized for Node 8+.
-- `build/schematron-runner.mjs`
-    This file is a ES6 module additionally featuring dynamic imports. This may be used by bundlers, Node's ES module loader or modern browsers using `<script type="module" src="schematron-runner.mjs"></script>`.
-
-### API
-
-The following APIs are available.
-
-#### Interface: Options
+### Interface: Options
 
 - `options.excludeWarnings` [&lt;boolean&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#Boolean_type) Determines whether or not warnings should be tested and returned. If this is set to `true` the `result.warnings` array will be empty and the assertions that are detected as warnings will not be included in `result.passed`. *Defaults to `false`.*
 - `options.resourceDir` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The path to a directory containing resource files (eg. `voc.xml`) which may be necessary for some schematron tests. *Defaults to `'./'`, the current directory.*
@@ -98,7 +118,7 @@ const results = await validateFocused(xml, schematron, webDefaults(), {
 });
 ```
 
-#### Interface: Results
+### Interface: Results
 
 - `results.errors` [&lt;Object[]&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) An array of error objects.
 - `results.ignored` [&lt;Object[]&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) An array of ingored objects.
@@ -140,11 +160,11 @@ The `ignored` tests are those that resulted in an exception while running (eg. t
 }
 ```
 
-#### clearCache ()
+### clearCache ()
 
 The validator uses a cache to store parsed schematrons, an intermediate data structure used to store revelant schematron information. This reduces the runtime of the validator when validating against the same schematron multiple times.
 
-#### validate (xml, schematron[, options])
+### validate (xml, schematron[, options])
 
 - `xml` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing an XML document to be validated.
 - `schematron` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing a Schematron XML document to use for validation.
@@ -153,41 +173,41 @@ The validator uses a cache to store parsed schematrons, an intermediate data str
 
 Equivalent of calling `validateFocused(xml, schematron, polymorphicDefaults(), options)`. See [Interface: Results](#interface-results) for description of the results object.
 
-#### validateFocused (xml, schematron, defaults[, options])
+### validateFocused (xml, schematron, defaults[, options])
 
 - `xml` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing an XML document to be validated.
 - `schematron` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The string path, url or contents representing a Schematron XML document to use for validation.
-- `defaults` [&lt;Function&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function) Function used to fill default options where nothing is provided. See [polymorphicDefaults](#polymorphicdefaults-field-type), [throwDefaults](#throwdefaults-field-type), and [webDefaults](#webdefaults-field-types). Custom functions should fallback upon one of the three provided functions.
+- `defaults` [&lt;Function&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function) Function used to fill default options where nothing is provided. See [polymorphicDefaults](#polymorphicdefaults-field-type), [throwDefaults](#throwdefaults-field-type), and [webDefaults](#webdefaults-field-type). Custom functions should fallback upon one of the three provided functions.
 - `options` [&lt;Options&gt;](#interface-options) Optional options object overriding default processing.
 - Returns: [&lt;Promise&lt;Results&gt;&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
 
 Validates a document against a schematron ruleset.
 See [Interface: Results](#interface-results) for description of the results object.
 
-#### parseSchematron (document)
+### parseSchematron (document)
 
 - `document` [&lt;Document&gt;](https://developer.mozilla.org/en-US/docs/Web/API/Document) Schematron DOM document.
 - Returns: [&lt;Object&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object) The parsed information representing the schematron document.
 
 Parse a schematron document to an internal representation. Might be usefull for displaying the discovered parts of a schematron file.
 
-#### polymorphicDefaults (field, type)
+### polymorphicDefaults (field, type)
 
 - `field` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The name of the option to provide a default value for.
 - `type` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The type of the option provided by the base options object.
 
 The provider will prefer gobal objects as if in a web context. If the global objects are not set it will load external packages to provide the functionality.
 
-For the prebuilt `build/schematron-browser.js` this is an alias for [webDefaults](#webdefaults-fields-type).
+For the prebuilt `build/schematron-browser.js` this is an alias for [webDefaults](#webdefaults-field-type).
 
-#### throwDefaults (field, type)
+### throwDefaults (field, type)
 
 - `field` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The name of the option to provide a default value for.
 - `type` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The type of the option provided by the base options object.
 
 The provider will throw when called. A full options object must have been used.
 
-#### webDefaults (field, type)
+### webDefaults (field, type)
 
 - `field` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The name of the option to provide a default value for.
 - `type` [&lt;string&gt;](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type) The type of the option provided by the base options object.
