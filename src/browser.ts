@@ -1,3 +1,5 @@
+import "regenerator-runtime/runtime";
+
 import { IValidateOptions } from "./common";
 import { validateFocused, webDefaults } from "./validator";
 
@@ -11,7 +13,7 @@ export {
 export {
     clearCache, validateFocused,
     throwDefaults, webDefaults,
-    CheckOptionsHandler, IValidationResult,
+    CheckOptionsHandler, ICompletedValidation, IValidationResult,
 } from "./validator";
 
 export { IValidateOptions } from "./common";

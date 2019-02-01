@@ -1,0 +1,43 @@
+:root, html {
+    margin: 0;
+    padding: 0;
+    background: #ccc;
+}
+
+body {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 8px;
+    background: #efefef;
+}
+
+#c {
+    position: relative;
+}
+
+tr.warn {
+    color: rgb(120, 85, 0);
+}
+tr.error {
+    color: rgb(90, 0, 0);
+}
+tr.passed {
+    color: rgb(0, 90, 0);
+}
+
+.i {
+    position: relative;
+    margin: 12px 0;
+}
+.i > input {
+    display: block;
+    width: 100%;
+}
+.i > input:focus {
+    outline: #009 thin;
+    border-color: #009;
+}
+.i > label {
+    display: block;
+    width: auto;
+}

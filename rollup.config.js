@@ -16,6 +16,9 @@ function xpathResolver() {
             if (importee === "xpath") {
                 return resolvePath(process.cwd(), "node_modules", "xpath", "xpath.js");
             }
+            if (importee === "regenerator-runtime/runtime") {
+                return resolvePath(process.cwd(), "node_modules", "regenerator-runtime", "runtime.js");
+            }
             return null;
         }
     };
@@ -58,7 +61,7 @@ export default [
         plugins: [
 			resolve(),
             sourcemaps(),
-            babel(babelConf({ chrome: "62", node: "8" })),
+            babel(babelConf({ chrome: "64", node: "8" })),
             terser(),
 		]
     },

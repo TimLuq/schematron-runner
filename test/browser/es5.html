@@ -1,0 +1,32 @@
+<html>
+    <head>
+        <title>Example</title>
+        <script data-main="./es5" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" defer="" async=""></script>
+        <link rel="stylesheet" href="./styles.css" />
+    </head>
+    <body>
+        <div id="c">
+            <div>
+                <div class="i">
+                    <label for="sch">Schematron URL</label>
+                    <input id="sch" value="https://raw.githubusercontent.com/OpenPEPPOL/peppol-bis-invoice-3/master/rules/examples/Allowance-example.xml" />
+                </div>
+                <div class="i">
+                    <label for="xml">XML URL</label>
+                    <input id="xml" value="https://raw.githubusercontent.com/OpenPEPPOL/peppol-bis-invoice-3/master/rules/sch/CEN-EN16931-UBL.sch" />
+                </div>
+                <div>
+                    <button id="btn" disabled="disabled">Run validation</button>
+                    <span id="status">Loading...</span>
+                </div>
+            </div>
+            <hr />
+            <table id="table">
+                <thead>
+                    <tr><th>Lvl</th><th>Assertion</th><th>Description</th></tr>
+                </thead>
+                <tbody id="results"></tbody>
+            </table>
+        </div>
+    </body>
+</html>

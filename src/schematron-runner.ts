@@ -8,7 +8,7 @@ export {
 export {
     clearCache, validate, validate as default, validateFocused,
     polymorphicDefaults, throwDefaults, webDefaults,
-    CheckOptionsHandler, IValidationResult,
+    CheckOptionsHandler, ICompletedValidation, IValidationResult,
 } from "./validator";
 
 export { IValidateOptions } from "./common";
