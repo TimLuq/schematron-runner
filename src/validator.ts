@@ -524,6 +524,18 @@ function processContextPart(part: string) {
 }
 
 function processContext(context: string) {
+    context = context.trim();
+    // quantified expressions
+    const qe = context.match(/^(some|every)\s+(\$[^\s]+)\s+in\s+(.*?)\s+satisfies\s+/);
+    if (qe) {
+        context = context.substring(qe[0].length)
+            .replace(new RegExp("\b\\" + qe[2] + "\b", "g"), qe[3]);
+        if (qe[1] === "every") {
+            context = `count(${qe[3]}) = count(${context})`;
+        } else {
+            context = `count(${context}) > 0`;
+        }
+    }
     let pa = context.indexOf("'");
     let pq = context.indexOf("\"");
     let curr = 0;
