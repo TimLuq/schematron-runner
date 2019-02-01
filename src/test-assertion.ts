@@ -22,9 +22,13 @@ export interface ITestAssertionError {
  * @param resourceDir a directory path
  * @param xmlSnippetMaxLength max length of the snippet to be returned
  */
-export default function testAssertion(test: string, selected: Node[], select: xpath.IXPathSelect,
+export default function testAssertion(test: string, selected: Node[] | Error, select: xpath.IXPathSelect,
                                       xmlDoc: Document, resourceDir: string, xmlSnippetMaxLength: number) {
     const results: ITestAssertionResult[] = [];
+
+    if (selected instanceof Error) {
+        return { ignored: true, errorMessage: selected.message } as ITestAssertionError;
+    }
 
     for (const sel of selected) {
         try {

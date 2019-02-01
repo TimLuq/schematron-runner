@@ -12,3 +12,5 @@ export {
 } from "./validator";
 
 export { IValidateOptions } from "./common";
+
+export { testSchematron, ISchematronTestInterface } from "./test-schematron";

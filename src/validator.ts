@@ -23,7 +23,7 @@ export function clearCache() {
 }
 
 interface IContextState extends IValidateOptions {
-    contexts: Map<string, Node[]>;
+    contexts: Map<string, Error | Node[]>;
     document: Document;
     DOM: { new(): DOMParser; };
     select: xpath.IXPathSelect;
@@ -219,6 +219,12 @@ function checkOptions(options: Partial<IValidateOptions>, handler: CheckOptionsH
     if (typeof options.xmlSnippetMaxLength !== "number" || isNaN(options.xmlSnippetMaxLength)) {
         options.xmlSnippetMaxLength = f("xmlSnippetMaxLength");
     }
+    if (typeof options.callbackError !== "function") {
+        options.callbackError = f("callbackError");
+    }
+    if (typeof options.callbackTrace !== "function") {
+        options.callbackTrace = f("callbackTrace");
+    }
     return options as IValidateOptions;
 }
 
@@ -246,6 +252,12 @@ export function polymorphicDefaults<T extends keyof IValidateOptions>(field: T, 
     if (field === "loadXMLUrl") {
         return loadXmlUrlPoly;
     }
+    if (field === "callbackError") {
+        return undefined;
+    }
+    if (field === "callbackTrace") {
+        return undefined;
+    }
 }
 
 export function webDefaults<T extends keyof IValidateOptions>(field: T, type: ReturnType<typeof tc>):
@@ -268,7 +280,7 @@ export function webDefaults<T extends keyof IValidateOptions>(field: T, type: Re
         };
     }
     if (field === "loadXMLUrl") {
-        return async function loadXMLUrl(options, url) {
+        return async function loadXMLUrl(options: IValidateOptions, url: string) {
             if (typeof fetch === "undefined") {
                 throw new Error([
                     "No global fetch implementation found.",
@@ -282,11 +294,23 @@ export function webDefaults<T extends keyof IValidateOptions>(field: T, type: Re
             return new d().parseFromString(t, "application/xml");
         };
     }
+    if (field === "callbackError") {
+        return undefined;
+    }
+    if (field === "callbackTrace") {
+        return undefined;
+    }
 }
 
 export function throwDefaults<T extends keyof IValidateOptions>(
     field: T, type: ReturnType<typeof tc>, value: any,
 ): IValidateOptions[T] {
+    if (field === "callbackError") {
+        return undefined;
+    }
+    if (field === "callbackTrace") {
+        return undefined;
+    }
     // tslint:disable-next-line:no-console
     console.error("Unexpected value of type %s for option field %s:", type, JSON.stringify(field), value);
     throw new TypeError("Unexpected value of type " + type + " for option field " + JSON.stringify(field));
@@ -381,6 +405,23 @@ export async function validateFocused(
         public constructor() {
             super();
             this.addStandardFunctions();
+            const ucerr = opts.callbackError;
+            const uctrc = opts.callbackTrace;
+            if (ucerr) {
+                this.addFunction("https://github.com/TimLuq/schematron-runner/tree/master/schemas/user", "error", ((
+                    _: xpath.XPathContext,
+                    code: xpath.XString,
+                    description?: xpath.XString,
+                    errorObject?: any,
+                ) => ucerr(code.toString(), description && description.toString(), errorObject)) as any);
+            }
+            if (uctrc) {
+                this.addFunction("https://github.com/TimLuq/schematron-runner/tree/master/schemas/user", "trace", ((
+                    _: xpath.XPathContext,
+                    value: any,
+                    label?: xpath.XString,
+                ) => uctrc(value, label && label.toString())) as any);
+            }
         }
         public getFunction(ln: string, ns: string) {
             const prefs = (ns && nsObj.get(ns)) || [];
@@ -478,6 +519,46 @@ export async function validateFocused(
     return ret;
 }
 
+function processContextPart(part: string) {
+    return part.replace(/([a-z-]+)\s+\(/g, (a, b) => b === "or" || b === "and" ? a : b + "(");
+}
+
+function processContext(context: string) {
+    let pa = context.indexOf("'");
+    let pq = context.indexOf("\"");
+    let curr = 0;
+    let b = "";
+    while (pa !== -1 || pq !== -1) {
+        let spos: number;
+        let schr: string;
+        if (pa === -1 || (pq !== -1 && pq < pa)) {
+            spos = pq;
+            schr = "\"";
+        } else {
+            spos = pa;
+            schr = "'";
+        }
+        if (curr !== spos) {
+            b += processContextPart(context.substring(curr, spos));
+        }
+        curr = context.indexOf(schr, spos + 1) + 1;
+        if (curr === 0) {
+            throw new Error("Unable to parse unbalanced quotes: " + context);
+        }
+        b += context.substring(spos, curr);
+        if (pa !== -1 && pa < curr) {
+            pa = context.indexOf(schr, curr);
+        }
+        if (pq !== -1 && pq < curr) {
+            pq = context.indexOf(schr, curr);
+        }
+    }
+    if (curr !== 0) {
+        b += processContextPart(context.substring(curr));
+    }
+    return b || context;
+}
+
 // tslint:disable-next-line:max-line-length
 async function checkRule(state: IContextState, rule: IRule, ruleMap: Map<string, IRule>, contextOverride?: string) {
     const results: Array<IRuleResult | IRuleIgnored> = [];
@@ -485,14 +566,22 @@ async function checkRule(state: IContextState, rule: IRule, ruleMap: Map<string,
     const context = contextOverride || rule.context as string;
 
     // Determine the sections within context, load selected section from cache if possible
-    let selected = state.contexts.get(context) as Node[];
-    let contextModified = context;
+    let selected = state.contexts.get(context) as Error | Node[];
     if (!selected) {
         if (context) {
-            if (context.indexOf("/") !== 0) {
-                contextModified = "//" + context;
+            let contextModified = context;
+            try {
+                contextModified = processContext(context);
+                if (context.indexOf("/") !== 0) {
+                    contextModified = "//" + context;
+                }
+                selected = state.select(contextModified, state.document) as Node[];
+            } catch (err) {
+                const err2 = new Error("Unable to parse context [" + (rule.id || "") + "]: " + context);
+                (err2 as any).fullContext = contextModified;
+                (err2 as any).innerError = err;
+                selected = err;
             }
-            selected = state.select(contextModified, state.document) as Node[];
         } else {
             selected = [state.document];
         }
@@ -506,6 +595,7 @@ async function checkRule(state: IContextState, rule: IRule, ruleMap: Map<string,
 
             // Extract values from external document and modify test if a document call is made
             const originalTest = test;
+            test = processContext(test);
             if (/=document\((\'[-_.A-Za-z0-9]+\'|\"[-_.A-Za-z0-9]+\")\)/.test(test)) {
                 try {
                     test = await replaceTestWithExternalDocument(state, test, state.resourceDir);

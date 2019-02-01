@@ -2,12 +2,12 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
     <body>
         <table>
-            <tr>
+            <tr row-number="1" id="r1" first-row="true">
                 <th>Cell.1.1</th>
                 <th>Cell.1.2</th>
                 <th>Cell.1.3</th>
             </tr>
-            <tr>
+            <tr row-number="2" id="r2">
                 <td>Cell.2.1</td>
                 <td>Cell.2.2</td>
                 <td>Cell.2.3</td>

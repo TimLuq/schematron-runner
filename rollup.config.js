@@ -1,13 +1,13 @@
 import resolve from 'rollup-plugin-node-resolve';
 import sourcemaps from 'rollup-plugin-sourcemaps';
-// import { terser } from 'rollup-plugin-terser';
+import { terser } from 'rollup-plugin-terser';
 import babel from 'rollup-plugin-babel';
 
 import pkg from './package.json';
 
 import { resolve as resolvePath } from "path";
 
-function terser() { return { name: "terser" }; }
+// function terser() { return { name: "terser" }; }
 
 function xpathResolver() {
     return {
@@ -34,7 +34,8 @@ export default [
 		input: 'esm/browser.js',
 		external: ['fs', 'node-fetch', 'xmldom'],
 		output: {
-			name: pkg.name,
+            name: pkg.name,
+            sourcemap: true,
 			file: pkg.browser,
             format: 'umd',
             exports: 'named',
@@ -51,8 +52,8 @@ export default [
 		input: 'esm/schematron-runner.js',
 		external: ['fs', 'node-fetch', 'xpath', 'xmldom'],
 		output: [
-			{ file: pkg.main, format: 'cjs', exports: 'named' },
-			{ file: pkg.module, format: 'es', exports: 'named' },
+			{ file: pkg.cjs, sourcemap: true, format: 'cjs', exports: 'named' },
+			{ file: pkg.module, sourcemap: true, format: 'es', exports: 'named' },
 		],
         plugins: [
 			resolve(),
@@ -61,12 +62,21 @@ export default [
             terser(),
 		]
     },
+
+	{
+		input: 'esm/schematron-runner.js',
+		external: ['fs', 'node-fetch', 'xpath', 'xmldom'],
+		output: { file: pkg.cjsDebug, sourcemap: true, format: 'cjs', exports: 'named' },
+        plugins: [
+            sourcemaps(),
+		]
+    },
     
 	{
 		input: 'esm/bin.js',
 		external: ['fs', 'node-fetch', 'xpath', 'xmldom'],
 		output: [
-			{ file: pkg.bin, format: 'cjs', exports: 'named', banner: "#!/usr/bin/env node" },
+			{ file: pkg.bin, sourcemap: true, format: 'cjs', exports: 'named', banner: "#!/usr/bin/env node" },
 		],
         plugins: [
             resolve(),

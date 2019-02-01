@@ -164,9 +164,6 @@ export declare namespace xpath {
         public caseInsensitive?: boolean;
         public allowAnyNamespaceForNoPrefix?: boolean;
 
-        public callbackError?: (code: string | null, description?: string, errorObject?: any) => void;
-        public callbackTrace?: (value: any, label?: string) => void;
-
         public constructor(vr?: VariableResolver, nr?: NamespaceResolver, fr?: FunctionResolver);
 
         public extend<T extends object>(newProps: T): XPathContext & T;
@@ -332,7 +329,25 @@ export namespace xpath {
         }
     }
 
+    export class XNCName extends XString {}
+
+    export class XQName extends XString {
+        public readonly namespaceURI: string;
+        public readonly localName: string;
+        public readonly prefix: string;
+        public constructor(s?: string, ns?: string | null) {
+            const p = s ? s.indexOf(":") : -1;
+            const pf = p === -1 ? "" : (s as string).substring(0, p);
+            const ln = p === -1 ? s || "" : (s as string).substring(p + 1);
+            super(`{${ns || ""}}${ln}`);
+            this.prefix = pf;
+            this.namespaceURI = ns || "";
+            this.localName = ln;
+        }
+    }
+
     export class XSequence<T extends IValueExpression> implements IValueExpression {
+        public static readonly EMPTY = new XSequence([]);
         public readonly items: T[];
         public readonly size: number;
         protected evaluated: boolean = false;
@@ -449,7 +464,9 @@ const stdFuncsXs = {
     base64Binary: binaryString,
     hexBinary: binaryString,
 
-    double: (c: xpath.XPathContext, v: xpath.XPathType) => new xpath.XDouble(v.evaluate(c).numberValue()),
+    double: (c: xpath.XPathContext, v: xpath.XPathType) => {
+        return new xpath.XDouble(v.evaluate(c).numberValue());
+    },
     float: (c: xpath.XPathContext, v: xpath.XPathType) => new xpath.XFloat(v.evaluate(c).numberValue()),
 
     anyURI: xsnormalizedString,
@@ -638,6 +655,8 @@ function formatNumber(n: number, p: string) {
     return b.replace(/^[^0-9]+/, "");
 }
 
+const customSchemaPath = "https://github.com/TimLuq/schematron-runner/tree/master/schemas/";
+
 const stdFuncsFn = {
 
     // Accessors
@@ -669,32 +688,50 @@ const stdFuncsFn = {
         return b ? TRUE : FALSE;
     },
 
+    "string": (c: xpath.XPathContext, v?: xpath.XNodeSet) => {
+        const vv = v ? v.evaluate(c) : createNodeSet(c.contextNode as Node);
+        return vv.string();
+    },
+
     // Errors and diagnostics
 
     "error": (
         c: xpath.XPathContext, code?: xpath.IValueExpression,
-        description?: xpath.XString, errorObject?: xpath.IValueExpression) => {
-            const tc = (code && code.toString()) || null;
-            const td = description && description.toString();
-            const ucb = c.callbackError;
-            if (typeof ucb === "function") {
-                ucb(tc, td, errorObject);
-            } else {
-                const em = tc !== null
-                    ? (typeof td === "string" ? tc + ": " + td : tc)
-                    : (td || "");
-                const err = new Error(em);
-                (err as any).code = tc;
-                throw err;
+        description?: xpath.XString, errorObject?: xpath.IValueExpression,
+    ) => {
+        const ucb = c.functionResolver.getFunction("error", customSchemaPath + "user");
+        if (typeof ucb === "function") {
+            const args = [code || new xpath.XQName("FOER0000", "http://www.w3.org/2005/xqt-errors")];
+            if (description) {
+                args.push(description);
+                if (errorObject) {
+                    args.push(errorObject);
+                }
             }
+            const r = ucb(c, ...args);
+            if ((r as any) === true || r && (r instanceof xpath.XBoolean && r.booleanValue())) {
+                return TRUE;
+            }
+        }
+        const tc = (code && code.toString()) || "{http://www.w3.org/2005/xqt-errors}FOER0000";
+        const td = description && description.toString();
+        const em = tc !== null
+            ? (typeof td === "string" ? tc + ": " + td : tc)
+            : (td || "");
+        const err = new Error(em);
+        (err as any).code = tc;
+        throw err;
     },
 
     "trace": (c: xpath.XPathContext, value: xpath.IValueExpression, label?: xpath.XString) => {
         const v = value.evaluate(c);
-        const l = label && label.evaluate().toString();
-        const ucb = c.callbackTrace;
+        const ucb = c.functionResolver.getFunction("trace", customSchemaPath + "user");
         if (typeof ucb === "function") {
-            ucb(v, l);
+            const args = [v];
+            if (label) {
+                args.push(label.evaluate(c).string());
+            }
+            ucb(c, ...args);
         }
         return v;
     },
@@ -1195,7 +1232,166 @@ const stdFuncsFn = {
 
     // TODO: https://www.w3.org/TR/xpath-functions/#dates-times
 
-    // TODO: https://www.w3.org/TR/xpath-functions/#QName-funcs
+    "resolve-QName": (
+        c: xpath.XPathContext,
+        qname: xpath.XString | xpath.XSequence<any>,
+        element: xpath.XNodeSet,
+    ) => {
+        const e = qname.evaluate(c);
+        if (e instanceof xpath.XSequence) {
+            if (e.size === 0) {
+                return e;
+            }
+            throw new TypeError("Unexpected non-empty sequence.");
+        }
+        if (element.size !== 1) {
+            throw new TypeError("Unexpected size of node list (" + element.size + ").");
+        }
+        const s = e.stringValue();
+        const p = s.indexOf(":");
+        const pfx = p === -1 ? null : s.substring(0, p);
+        const ele = element.toArray()[0];
+        const uri = ele.lookupNamespaceURI(pfx);
+        if (!uri && pfx) {
+            const err = new Error("Could not find namespace for prefix " + pfx);
+            (err as any).code = "{http://www.w3.org/2005/xqt-errors}FONS0004";
+            throw err;
+        }
+        return new xpath.XQName(s, uri);
+    },
+
+    "QName": (
+        c: xpath.XPathContext,
+        paramURI: xpath.XString | xpath.XSequence<any>,
+        paramQName: xpath.XString,
+    ) => {
+        let ns = "";
+        const e = paramURI.evaluate(c);
+        if (e instanceof xpath.XSequence) {
+            if (e.size !== 0) {
+                throw new TypeError("Unexpected non-empty sequence.");
+            }
+        } else {
+            ns = e.stringValue();
+        }
+        return new xpath.XQName(paramQName.evaluate(c).stringValue(), ns);
+    },
+
+    "prefix-from-QName": (
+        c: xpath.XPathContext,
+        arg: xpath.XQName | xpath.XSequence<any>,
+    ) => {
+        const e = arg.evaluate(c) as xpath.XQName | xpath.XSequence<any>;
+        if (e instanceof xpath.XSequence) {
+            if (e.size === 0) {
+                return e;
+            }
+            throw new TypeError("Unexpected non-empty sequence.");
+        }
+        if (!e.prefix) {
+            return xpath.XSequence.EMPTY;
+        }
+        return new xpath.XNCName(e.prefix);
+    },
+
+    "local-name-from-QName": (
+        c: xpath.XPathContext,
+        arg: xpath.XQName | xpath.XString | xpath.XSequence<any>,
+    ) => {
+        const e = arg.evaluate(c) as xpath.XQName | xpath.XSequence<any>;
+        if (e instanceof xpath.XSequence) {
+            if (e.size === 0) {
+                return e;
+            }
+            throw new TypeError("Unexpected non-empty sequence.");
+        }
+        if (e.localName) {
+            return new xpath.XNCName(e.localName);
+        }
+        return new xpath.XNCName(e.stringValue().replace(/^.*[:\}]/, ""));
+    },
+
+    "namespace-uri-from-QName": (
+        c: xpath.XPathContext,
+        arg: xpath.XQName | xpath.XString | xpath.XSequence<any>,
+    ) => {
+        const e = arg.evaluate(c) as xpath.XQName | xpath.XSequence<any>;
+        if (e instanceof xpath.XSequence) {
+            if (e.size === 0) {
+                return e;
+            }
+            throw new TypeError("Unexpected non-empty sequence.");
+        }
+        if (e.namespaceURI) {
+            return new xpath.XString(e.namespaceURI);
+        }
+        const d = e.stringValue().match(/^\{(.*)\}/);
+        return new xpath.XString(d ? d[1] : "");
+    },
+
+    "namespace-uri-for-prefix": (
+        c: xpath.XPathContext,
+        prefix: xpath.XString | xpath.XSequence<any>,
+        element: xpath.XNodeSet,
+    ) => {
+        const e = prefix.evaluate(c);
+        let s: string;
+        if (e instanceof xpath.XSequence) {
+            if (e.size === 0) {
+                s = "";
+            } else {
+                throw new TypeError("Unexpected non-empty sequence.");
+            }
+        } else {
+            s = e.stringValue();
+        }
+        if (element.size !== 1) {
+            throw new TypeError("Unexpected size of node list (" + element.size + ").");
+        }
+        const p = s.indexOf(":");
+        const ele = element.toArray()[0];
+        const uri = ele.lookupNamespaceURI(s || null);
+        if (!uri) {
+            return xpath.XSequence.EMPTY;
+        }
+        return new xpath.XString(uri);
+    },
+
+    "in-scope-prefixes": (
+        c: xpath.XPathContext,
+        element: xpath.XNodeSet,
+    ) => {
+        element = element.evaluate(c) as xpath.XNodeSet;
+        if (element.size !== 1) {
+            throw new TypeError("Unexpected size of node list (" + element.size + ").");
+        }
+        let ele: null | Node = element.toArray()[0];
+        const pfxs = new Set<string>();
+        pfxs.add("xml");
+        while (ele) {
+            if (ele.nodeType === 1) {
+                const el = ele as Element;
+                const atts = el.attributes;
+                // tslint:disable-next-line:prefer-for-of
+                for (let i = 0; i < atts.length; i++) {
+                    const a = atts[i];
+                    if (a.prefix === "xmlns") {
+                        pfxs.add(a.localName);
+                    } else if (a.nodeName === "xmlns") {
+                        pfxs.add("");
+                    }
+                }
+            }
+            ele = ele.parentNode;
+        }
+        const parr: xpath.XString[] = [];
+        for (const a of pfxs.values()) {
+            parr.push(new xpath.XString(a));
+        }
+        return new xpath.XSequence(parr);
+    },
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#binary-functions
 
     "name": (
         c: xpath.XPathContext,
@@ -1336,10 +1532,292 @@ const stdFuncsFn = {
         if (arg instanceof xpath.XNodeSet) {
             return toBool(arg.size !== 0);
         }
-        throw new TypeError("fn:empty expected a sequence");
+        throw new TypeError("fn:exists expected a sequence");
     },
 
-    // TODO: https://www.w3.org/TR/xpath-functions/#func-head ...
+    /** Returns the first element of a sequence. */
+    "head": (
+        c: xpath.XPathContext,
+        arg: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        arg = arg.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (arg instanceof xpath.XSequence) {
+            if (arg.size === 0) {
+                return arg;
+            }
+            return arg.items[0];
+        }
+        if (arg instanceof xpath.XNodeSet) {
+            if (arg.size === 0) {
+                return xpath.XSequence.EMPTY;
+            }
+            if (arg.size === 1) {
+                return arg;
+            }
+            const a = new xpath.XNodeSet();
+            a.add(arg.first() as Node);
+            return a;
+        }
+        throw new TypeError("fn:head expected a sequence");
+    },
+
+    /** Returns a slice of the sequence without the first item. */
+    "tail": (
+        c: xpath.XPathContext,
+        arg: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        arg = arg.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (arg instanceof xpath.XSequence) {
+            if (arg.size < 2) {
+                return xpath.XSequence.EMPTY;
+            }
+            return new xpath.XSequence(arg.items.slice(2));
+        }
+        if (arg instanceof xpath.XNodeSet) {
+            if (arg.size < 2) {
+                return xpath.XSequence.EMPTY;
+            }
+            const a = new xpath.XNodeSet();
+            a.addArray(arg.toUnsortedArray().slice(2));
+            return a;
+        }
+        throw new TypeError("fn:tail expected a sequence");
+    },
+
+    /** Insert before. */
+    "insert-before": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+        position: number,
+        inserts: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        target = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        inserts = inserts.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (target.size === 0) {
+            return inserts;
+        }
+        if (inserts.size === 0) {
+            return target;
+        }
+        if (position < 1) {
+            position = 1;
+        } else if (position > target.size) {
+            position = target.size;
+        }
+        if (target instanceof xpath.XSequence && inserts instanceof xpath.XSequence) {
+            return new xpath.XSequence(([] as xpath.IValueExpression[]).concat(
+                target.items.slice(0, position - 1),
+                inserts,
+                target.items.slice(position - 1),
+            ));
+        }
+        if (target instanceof xpath.XNodeSet && inserts instanceof xpath.XNodeSet) {
+            const a = new xpath.XNodeSet();
+            const e = target.toUnsortedArray();
+            a.addArray(e.slice(0, position - 1));
+            a.addArray(inserts.toUnsortedArray());
+            a.addArray(e.slice(position - 1));
+            return a;
+        }
+        throw new TypeError("fn:insert-before expected a sequence");
+    },
+
+    /** Returns a slice of the sequence without the item at a specific position. */
+    "remove": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+        position: number,
+    ) => {
+        target = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (target.size === 0 || position < 1 || position > target.size) {
+            return target;
+        }
+        if (target instanceof xpath.XSequence) {
+            return new xpath.XSequence(([] as xpath.IValueExpression[]).concat(
+                target.items.slice(0, position - 1),
+                target.items.slice(position),
+            ));
+        }
+        if (target instanceof xpath.XNodeSet) {
+            const a = new xpath.XNodeSet();
+            const e = target.toUnsortedArray();
+            a.addArray(e.slice(0, position - 1));
+            a.addArray(e.slice(position));
+            return a;
+        }
+        throw new TypeError("fn:remove expected a sequence");
+    },
+
+    /** Returns sequence in the reversed order. */
+    "reverse": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        target = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (target.size === 0) {
+            return target;
+        }
+        if (target instanceof xpath.XSequence) {
+            return new xpath.XSequence(target.items.reverse());
+        }
+        if (target instanceof xpath.XNodeSet) {
+            const a = new xpath.XNodeSet();
+            const e = target.toUnsortedArray();
+            a.addArray(e.reverse());
+            return a;
+        }
+        throw new TypeError("fn:reverse expected a sequence");
+    },
+
+    /** Returns slice of a sequence. */
+    "subsequence": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+        start: xpath.XNumber,
+        length?: xpath.XNumber,
+    ) => {
+        target = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (target.size === 0) {
+            return target;
+        }
+        let p0 = Math.round(start.evaluate(c).numberValue());
+        const p1 = length ? Math.round(length.evaluate(c).numberValue()) + p0 : 0x7FFFFFFF;
+        if (isNaN(p0) || isNaN(p1) || p1 <= p0 || p0 < 2) {
+            return xpath.XSequence.EMPTY;
+        }
+        if (p0 < 1) {
+            p0 = 1;
+        }
+        if (target instanceof xpath.XSequence) {
+            return new xpath.XSequence(target.items.slice(p0 - 1, p1 - 1));
+        }
+        if (target instanceof xpath.XNodeSet) {
+            const a = new xpath.XNodeSet();
+            const e = target.toUnsortedArray();
+            a.addArray(e.slice(p0 - 1, p1 - 1));
+            return a;
+        }
+        throw new TypeError("fn:subsequence expected a sequence");
+    },
+
+    /** Returns some permutation of the sequence. */
+    "unordered": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        return target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+    },
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#comparing-sequences
+    // TODO: https://www.w3.org/TR/xpath-functions/#cardinality-functions
+
+    /** Returns some permutation of the sequence. */
+    "count": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        const v = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        return new xpath.XDecimal(typeof v.size === "number" ? v.size : 1);
+    },
+
+    /** Returns some permutation of the sequence. */
+    "avg": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        const v = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (v.size === 0) {
+            return xpath.XSequence.EMPTY;
+        }
+        let items: number[] = [];
+        if (target instanceof xpath.XSequence) {
+            items = target.items.map((x) => x.numberValue());
+        } else if (target instanceof xpath.XNodeSet) {
+            items = target.toArray().map((x) => parseFloat(x.textContent || ""));
+        } else {
+            throw new TypeError("fn:avg expected a sequence");
+        }
+        return new xpath.XDecimal(items.length === 1 ? items[0] : items.reduce((p, x) => p + x) / items.length);
+    },
+
+    /** Returns some permutation of the sequence. */
+    "max": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+    ) => {
+        const v = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (v.size === 0) {
+            return xpath.XSequence.EMPTY;
+        }
+        let cons: { new(val: number): xpath.XNumber; } = xpath.XDecimal;
+        let max: number;
+        if (target instanceof xpath.XSequence) {
+            cons = (target.items[0].constructor as any) || cons;
+            max = target.items.reduce((p, x) => Math.max(p, x.numberValue()), Number.MIN_VALUE);
+        } else if (target instanceof xpath.XNodeSet) {
+            max = target.toArray().reduce((p, x) => Math.max(p, parseFloat(x.textContent || "")), Number.MIN_VALUE);
+        } else {
+            throw new TypeError("fn:max expected a sequence");
+        }
+        return new cons(max);
+    },
+
+    /** Returns some permutation of the sequence. */
+    "min": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.XNumber> | xpath.XNodeSet,
+    ) => {
+        const v = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (v.size === 0) {
+            return xpath.XSequence.EMPTY;
+        }
+        let cons: { new(val: number): xpath.XNumber; } = xpath.XDecimal;
+        let min: number;
+        if (target instanceof xpath.XSequence) {
+            cons = (target.items[0].constructor as any) || cons;
+            min = target.items.reduce((p, x) => Math.max(p, x.numberValue()), Number.MAX_VALUE);
+        } else if (target instanceof xpath.XNodeSet) {
+            min = target.toArray().reduce((p, x) => Math.max(p, parseFloat(x.textContent || "")), Number.MAX_VALUE);
+        } else {
+            throw new TypeError("fn:min expected a sequence");
+        }
+        return new cons(min);
+    },
+
+    /** Returns some permutation of the sequence. */
+    "sum": (
+        c: xpath.XPathContext,
+        target: xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet,
+        zero: xpath.IValueExpression,
+    ) => {
+        const v = target.evaluate(c) as xpath.XSequence<xpath.IValueExpression> | xpath.XNodeSet;
+        if (v.size === 0) {
+            return zero || new xpath.XDecimal(0);
+        }
+        let cons: { new(val: number): xpath.XNumber; } = xpath.XDecimal;
+        let sum: number = 0;
+        if (target instanceof xpath.XSequence) {
+            cons = (target.items[0].constructor as any) || cons;
+            sum = target.items.reduce(
+                (p, x) => p + x.numberValue(),
+                zero.evaluate(c).numberValue(),
+            );
+        } else if (target instanceof xpath.XNodeSet) {
+            sum = target.toArray().reduce(
+                (p, x) => p + parseFloat(x.textContent || ""),
+                zero.evaluate(c).numberValue(),
+            );
+        } else {
+            throw new TypeError("fn:avg expected a sequence");
+        }
+        return new cons(sum);
+    },
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#fns-on-identifiers
+    // TODO: https://www.w3.org/TR/xpath-functions/#fns-on-docs
+    // TODO: https://www.w3.org/TR/xpath-functions/#parsing-and-serializing
+
+    // TODO: https://www.w3.org/TR/xpath-functions/#context ...
 
 };
 
@@ -1385,8 +1863,14 @@ const stdGetNamespace = xpath.NamespaceResolver.prototype.getNamespace;
 xpath.NamespaceResolver.prototype.getNamespace =
     function getNamespace(this: xpath.NamespaceResolver, prefix: string, n: Node) {
         const r = stdGetNamespace.call(this, prefix, n);
-        if (!r && (prefix === "xs" || prefix === "xsi")) {
+        if (r) {
+            return r;
+        }
+        if (prefix === "xs" || prefix === "xsi") {
             return "http://www.w3.org/2001/XMLSchema-datatypes";
+        }
+        if (prefix === "fn") {
+            return "http://www.w3.org/2005/xpath-functions";
         }
         return r;
     };
@@ -1402,7 +1886,8 @@ export function createOptionsEvaluator(evaluatorOptions: xpath.IXPathEvaluatorOp
             (err as any).innerError = e;
             throw err;
         }
-        const value = ev.evaluate({ ...evaluatorOptions, node });
+        const opts = { ...evaluatorOptions, node };
+        const value = ev.evaluate(opts);
 
         if (value === null) {
             return undefined as any as string;

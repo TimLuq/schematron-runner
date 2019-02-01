@@ -46,4 +46,21 @@ export interface IValidateOptions {
      * @returns {Promise<Document>}
      */
     loadXMLUrl(options: IValidateOptions, url: string): PromiseLike<Document>;
+
+    /**
+     * Called by `fn:error()`.
+     *
+     * @param {string} code the error code, empty is eq `FOER0000`
+     * @param {?string} description text description of the error
+     * @param {?object} errorObject any object passed from the function call
+     */
+    callbackError?(code: string | null, description?: string, errorObject?: any): void;
+
+    /**
+     * Called by `fn:trace()`.
+     *
+     * @param {object} value some value to be traced
+     * @param {?string} label label for the trace
+     */
+    callbackTrace?(value: any, label?: string): void;
 }

@@ -23,3 +23,5 @@ export async function validate(xml: string, schematron: string, options?: Partia
 }
 
 export default validate;
+
+export { testSchematron, ISchematronTestInterface } from "./test-schematron";

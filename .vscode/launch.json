@@ -49,6 +49,24 @@
         {
             "type": "node",
             "request": "launch",
+            "name": "Run AVA test XPATH",
+            "program": "${workspaceRoot}/node_modules/ava/profile.js",
+            "args": [
+                "test/tests/test-xpath-fn.spec.ts"
+            ],
+            "sourceMaps": true,
+            "skipFiles": [
+                "<node_internals>/**/*.js",
+                "node_modules/bluebird/**/*.js",
+                "node_modules/esm/**/*.js",
+                "node_modules/@babel/**/*.js",
+                "node_modules/core-js/**/*.js"
+                //, "node_modules/**/*.js"
+            ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
             "name": "Run AVA test XDR",
             "program": "${workspaceRoot}/node_modules/ava/profile.js",
             "args": [
