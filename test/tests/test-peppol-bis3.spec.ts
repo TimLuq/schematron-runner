@@ -110,13 +110,13 @@ const fileRepo = "https://raw.githubusercontent.com/OpenPEPPOL/peppol-bis-invoic
 test(bisValidation, `${fileRepo}/rules/examples/Allowance-example.xml`, {
     cc: { errors: 0, warnings: 0, ignored: 0, passed: 35 },
     cu: { errors: 0, warnings: 19, ignored: 9, passed: 946 },
-    pc: { errors: 0, warnings: 0, ignored: 0, passed: 0 },
-    pu: { errors: 0, warnings: 0, ignored: 0, passed: 0 },
+    pc: { errors: 0, warnings: 0, ignored: 3, passed: 0 },
+    pu: { errors: 0, warnings: 4, ignored: 36, passed: 281 },
 });
 
 test(bisValidation, `${fileRepo}/rules/examples/Vat-category-S.xml`, {
     cc: { errors: 0, warnings: 0, ignored: 0, passed: 22 },
     cu: { errors: 0, warnings: 13, ignored: 8, passed: 895 },
-    pc: { errors: 0, warnings: 0, ignored: 0, passed: 0 },
-    pu: { errors: 0, warnings: 0, ignored: 0, passed: 0 },
+    pc: { errors: 0, warnings: 0, ignored: 3, passed: 0 },
+    pu: { errors: 0, warnings: 0, ignored: 33, passed: 218 },
 });

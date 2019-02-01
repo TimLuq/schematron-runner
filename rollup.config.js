@@ -2,6 +2,7 @@ import resolve from 'rollup-plugin-node-resolve';
 import sourcemaps from 'rollup-plugin-sourcemaps';
 import { terser } from 'rollup-plugin-terser';
 import babel from 'rollup-plugin-babel';
+import commonjs from 'rollup-plugin-commonjs';
 
 import pkg from './package.json';
 
@@ -19,6 +20,11 @@ function xpathResolver() {
             if (importee === "regenerator-runtime/runtime") {
                 return resolvePath(process.cwd(), "node_modules", "regenerator-runtime", "runtime.js");
             }
+            /*
+            if (!importee.endsWith(".js")) {
+                console.log("Resolve: %s", importee);
+            }
+            */
             return null;
         }
     };
@@ -35,7 +41,7 @@ export default [
 	// browser-friendly UMD build
 	{
 		input: 'esm/browser.js',
-		external: ['fs', 'node-fetch', 'xmldom'],
+		external: ['fs', 'node-fetch', 'xmldom', 'crypto'],
 		output: {
             name: pkg.name,
             sourcemap: true,
@@ -46,14 +52,15 @@ export default [
         plugins: [
 			xpathResolver(),
             sourcemaps(),
-            babel(babelConf("> 0.25%, not dead")),
+            commonjs(),
+            babel(babelConf("> 5%, not dead")),
             terser(),
 		]
 	},
 
 	{
 		input: 'esm/schematron-runner.js',
-		external: ['fs', 'node-fetch', 'xpath', 'xmldom'],
+		external: ['fs', 'node-fetch', 'xpath', 'xmldom', 'crypto'],
 		output: [
 			{ file: pkg.cjs, sourcemap: true, format: 'cjs', exports: 'named' },
 			{ file: pkg.module, sourcemap: true, format: 'es', exports: 'named' },
@@ -77,7 +84,7 @@ export default [
     
 	{
 		input: 'esm/bin.js',
-		external: ['fs', 'node-fetch', 'xpath', 'xmldom'],
+		external: ['fs', 'node-fetch', 'xpath', 'xmldom', 'crypto'],
 		output: [
 			{ file: pkg.bin, sourcemap: true, format: 'cjs', exports: 'named', banner: "#!/usr/bin/env node" },
 		],

@@ -9,8 +9,21 @@ function createTr(data) {
     }
     return r;
 }
+function buildstr(s) {
+    if (!s || typeof s !== "object") {
+        return s;
+    }
+    var r = [];
+    for (var i in s) {
+        var p = buildstr(s[i]);
+        if (p && p !== true) {
+            r.push(p);
+        }
+    }
+    return r.join("\n");
+}
 
-requirejs(['../../build/schematron-browser'], function (shematron) {
+requirejs(['../../build/schematron-browser'], function (schematron) {
     /** @type {HTMLButtonElement} */
     var btn = document.getElementById("btn");
     /** @type {HTMLDivElement} */
@@ -40,22 +53,27 @@ requirejs(['../../build/schematron-browser'], function (shematron) {
         validate(xml.value, sch.value, options).then(function (r) {
             r.errors.forEach(function (e) {
                 var d = ["🔴", e.assertionId, e.description];
-                results.appendChild(createTr(d));
+                results.appendChild(createTr(d)).className = "err";
             });
             r.ignored.forEach(function (e) {
-                var d = ["⚠", e.assertionId, e.errorMessage];
-                results.appendChild(createTr(d));
+                var d = ["⚠", e.assertionId, buildstr(e.errorMessage)];
+                results.appendChild(createTr(d)).className = "ign";
             });
             r.warnings.forEach(function (e) {
                 var d = ["🔸", e.assertionId, e.description];
-                results.appendChild(createTr(d));
+                results.appendChild(createTr(d)).className = "warn";
             });
             r.passed.forEach(function (e) {
                 var d = ["✓", e.assertionId, e.description];
-                results.appendChild(createTr(d));
+                results.appendChild(createTr(d)).className = "pass";
             });
 
-            status.textContent = "";
+            status.textContent = JSON.stringify({
+                errors: r.errors.length,
+                ignored: r.ignored.length,
+                warnings: r.warnings.length,
+                passed: r.passed.length
+            });
         }).catch(function (e) {
             console.error(e);
             status.textContent = e.toString();
@@ -66,4 +84,5 @@ requirejs(['../../build/schematron-browser'], function (shematron) {
 
     status.textContent = "";
     btn.disabled = false;
+    btn.click();
 });

@@ -5,7 +5,11 @@ import * as hiddenXpath from "xpath";
 
 // tslint:disable-next-line:no-namespace
 export namespace xpath {
-    Object.assign(xpath, hiddenXpath as {});
+    const src = ((hiddenXpath as any).default as typeof hiddenXpath) || hiddenXpath;
+    for (const s of Object.keys(src) as Array<keyof typeof hiddenXpath>) {
+        (xpath as any)[s] = src[s];
+    }
+    // Object.assign(xpath, hiddenXpath as any);
 }
 
 // tslint:disable-next-line:no-namespace

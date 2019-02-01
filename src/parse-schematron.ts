@@ -167,12 +167,13 @@ export default function parseSchematron(doc: Document) {
 
     // Find patterns
     const patterns = sel('//*[local-name()="pattern"]', doc) as Element[];
+    const unnamedRules: IRule[] = [];
 
     // Map patterns to rules
     for (const pattern of patterns) {
         const patternId = pattern.getAttribute("id");
         const defaultLevel = (patternId && patternLevelMap.get(patternId)) || "warning";
-        const parsedRules: IRule[] = [];
+        const parsedRules: IRule[] = patternId ? [] : unnamedRules;
         if (patternId) {
             if (parseAbstract(pattern.getAttribute("abstract"))) {
                 abstractPatterns.add(patternId);
@@ -231,6 +232,10 @@ export default function parseSchematron(doc: Document) {
 
     for (const patternId of abstractPatterns) {
         patternRuleMap.delete(patternId);
+    }
+
+    if (unnamedRules.length) {
+        patternRuleMap.set("", unnamedRules);
     }
 
     const ret: IParsedSchematron = {
