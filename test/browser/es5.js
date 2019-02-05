@@ -23,7 +23,22 @@ function buildstr(s) {
     return r.join("\n");
 }
 
-requirejs(['../../build/schematron-browser'], function (schematron) {
+function factory(Comlink) { 'use strict';
+    const worker = new Worker('./es5-worker.js');
+    return Comlink.proxy(worker);
+}
+
+var deps = ["https://cdn.jsdelivr.net/npm/comlinkjs@3/umd/comlink.js"]
+
+if (typeof Proxy === "undefined") {
+    deps.unshift("https://cdn.jsdelivr.net/npm/proxy-polyfill@0.3/proxy.min.js");
+}
+
+requirejs(deps, function () {
+    var Comlink = arguments[deps.length - 1];
+    var worker = new Worker('./es5-worker.js');
+    var schematron = Comlink.proxy(worker);
+
     /** @type {HTMLButtonElement} */
     var btn = document.getElementById("btn");
     /** @type {HTMLDivElement} */

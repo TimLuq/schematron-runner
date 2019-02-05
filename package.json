@@ -17,7 +17,8 @@
     "ci": "npm run build && npm run test",
     "coverage": "nyc report --reporter=text-lcov | npx coveralls",
     "report": "nyc report --reporter=html",
-    "test": "nyc ava"
+    "test": "nyc ava",
+    "start": "node test/browser/node-server.js"
   },
   "repository": {
     "type": "git",

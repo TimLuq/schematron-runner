@@ -91,6 +91,24 @@
                 "<node_internals>/**/*.js",
                 "node_modules/**/*.js"
             ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Run build/bin",
+            "program": "${workspaceRoot}/build/bin.js",
+            "args": [
+                "https://raw.githubusercontent.com/OpenPEPPOL/peppol-bis-invoice-3/master/rules/sch/CEN-EN16931-UBL.sch",
+                "https://raw.githubusercontent.com/OpenPEPPOL/peppol-bis-invoice-3/master/rules/examples/Allowance-example.xml"
+            ],
+            "sourceMaps": true,
+            "skipFiles": [
+                "<node_internals>/**/*.js",
+                "node_modules/bluebird/**/*.js",
+                "node_modules/esm/**/*.js",
+                "node_modules/@babel/**/*.js",
+                "node_modules/core-js/**/*.js"
+            ]
         }
     ]
 }

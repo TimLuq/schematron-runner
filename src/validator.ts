@@ -236,7 +236,7 @@ export function polymorphicDefaults<T extends keyof IValidateOptions>(field: T, 
     if (field === "DOMParser") {
         if (!dom) {
             if (typeof DOMParser === "undefined") {
-                dom = import("xmldom").then((x) => x.DOMParser);
+                dom = import("./dom-parser").then((x) => x.DOMParser);
             } else {
                 dom = Promise.resolve(DOMParser);
             }
