@@ -131,7 +131,7 @@ The `errors`, `passed`, and `warnings` arrays are reported as determined by the 
 They are instances of the following form:
 ```javascript
 {
-    type: type,                     // "error" or "warning"
+    type: type,                     // "error", "warning" or "info"
     test: test,                     // xpath test
     simplifiedTest: simplifiedTest, // xpath test with resource values included, if applicable, null otherwise
     description: description,       // schematron description of the test case
@@ -149,7 +149,7 @@ The `ignored` tests are those that resulted in an exception while running (eg. t
 ```javascript
 {
     errorMessage: errorMessage,     // reason for the exception/ignoring the test
-    type: type,                     // "error" or "warning"
+    type: type,                     // "error", "warning" or "info"
     test: test,                     // xpath test
     simplifiedTest: simplifiedTest, // xpath test with resource values included, if applicable, null otherwise
     description: description,       // schematron description of the test case

@@ -1,5 +1,5 @@
 
-import parseSchematron, { IAssertion, IFunction, IParsedSchematron, IRule } from "./parse-schematron";
+import parseSchematron, { IAssertion, IAssertionLevel, IFunction, IParsedSchematron, IRule } from './parse-schematron'
 import testAssertion, { ITestAssertionError, ITestAssertionResult } from "./test-assertion";
 
 import {
@@ -35,7 +35,7 @@ interface IRuleResult {
     results: ITestAssertionResult[] | ITestAssertionError;
     simplifiedTest: null | string;
     test: string;
-    type: "warning" | "error";
+    type: IAssertionLevel;
 }
 
 interface IRuleIgnored {
@@ -44,11 +44,11 @@ interface IRuleIgnored {
     errorMessage: string;
     simplifiedTest: null | string;
     test: string;
-    type: "warning" | "error";
+    type: IAssertionLevel;
 }
 
 export interface IValidationResult {
-    type: "error" | "warning";
+    type: IAssertionLevel;
     test: string;
     simplifiedTest: string | null;
     description: string;
@@ -62,7 +62,7 @@ export interface IValidationResult {
 }
 
 export interface IIgnoredResult {
-    type: "error" | "warning";
+    type: IAssertionLevel;
     test: string;
     simplifiedTest: string | null;
     patternId: string;

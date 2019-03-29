@@ -27,9 +27,11 @@ export interface IExtension {
     rule: string;
 }
 
+export type IAssertionLevel = "error" | "warning" | "info";
+
 export interface IAssertion {
     type: "assertion";
-    level: "error" | "warning";
+    level: IAssertionLevel;
     id: string;
     test: string;
     description: IDescription[];
@@ -92,7 +94,7 @@ export default function parseSchematron(doc: Document) {
     const namespaceMap = new Map<string, string>();
     const abstractPatterns = new Set<string>();
     const patternInstances = new Map<string, { isA: string; params: Map<string, string>; }>();
-    const patternLevelMap = new Map<string, "error" | "warning">();
+    const patternLevelMap = new Map<string, IAssertionLevel>();
     const patternRuleMap = new Map<string, IRule[]>();
     const ruleMap = new Map<string, IRule>();
     const functions = new Map<string, IFunction>();
@@ -137,31 +139,26 @@ export default function parseSchematron(doc: Document) {
 
     //// Pattern to level mapping
 
-    // Find errors phases
-    const errorPhase = sel('//*[local-name()="phase" and @id="errors"]', doc) as Element[];
+    const findPhase = (id: string, level: IAssertionLevel) => {
+        // Find phases
+        const phase = sel(`//*[local-name()="phase" and @id="${id}"]`, doc) as Element[];
 
-    // Store error patterns
-    if (errorPhase.length) {
-        for (const child of getNamedChildren(errorPhase[0], "active")) {
-            const patt = child.getAttribute("pattern");
-            if (patt) {
-                patternLevelMap.set(patt, "error");
+        // Store patterns
+        if (phase.length) {
+            for (const child of getNamedChildren(phase[0], "active")) {
+                const patt = child.getAttribute("pattern");
+                if (patt) {
+                    patternLevelMap.set(patt, level);
+                }
             }
         }
     }
 
-    // Find errors phases
-    const warningPhase = sel('//*[local-name()="phase" and @id="warnings"]', doc) as Element[];
-
-    // Store warning patterns
-    if (warningPhase.length) {
-        for (const child of getNamedChildren(warningPhase[0], "active")) {
-            const patt = child.getAttribute("pattern");
-            if (patt) {
-                patternLevelMap.set(patt, "warning");
-            }
-        }
-    }
+    // Collect phases in order of increasing severity,
+    // in case assertions are found at multiple levels
+    findPhase("info", "info")
+    findPhase("warnings", "warning")
+    findPhase("errors", "error")
 
     //// Pattern to rule and rule to assertion mapping
 
@@ -259,7 +256,7 @@ function replaceParams(params: Map<string, string>, content: string) {
     });
 }
 
-function getAssertionsAndExtensions(rule: Element, defaultLevel: "warning" | "error"): IAssertionOrExtension[] {
+function getAssertionsAndExtensions(rule: Element, defaultLevel: IAssertionLevel): IAssertionOrExtension[] {
     const assertionsAndExtensions: IAssertionOrExtension[] = [];
 
     // Find and store assertions
@@ -276,8 +273,10 @@ function getAssertionsAndExtensions(rule: Element, defaultLevel: "warning" | "er
             const rolelc = role.toLowerCase();
             if (rolelc === "fatal" || rolelc === "error") {
                 level = "error";
-            } else if (rolelc === "warning" || rolelc === "info" || rolelc === "obsolete" || rolelc === "obsolescent") {
+            } else if (rolelc === "warning" || rolelc === "obsolete" || rolelc === "obsolescent") {
                 level = "warning";
+            } else if (rolelc === "info") {
+                level = "info";
             }
         }
         assertionsAndExtensions.push({
