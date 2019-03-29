@@ -130,7 +130,7 @@ export function loadXML(
     if (prom) {
         return prom;
     }
-    if (/^(?:https?|file):\/\//.test(uri)) {
+    if (/^(?:https?|file|blob):\/\//.test(uri)) {
         prom = options.loadXMLUrl(options, uri);
     } else {
         prom = options.loadXMLFile(options, uri);
